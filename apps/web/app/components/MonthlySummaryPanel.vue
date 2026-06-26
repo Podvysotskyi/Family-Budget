@@ -12,12 +12,7 @@ type SummaryItem = {
 const props = defineProps<{
   dateRange: string
   items: SummaryItem[]
-  periodLabel: string
   title: string
-}>()
-
-const emit = defineEmits<{
-  'add-income': []
 }>()
 
 function formatCurrency(value: number) {
@@ -53,16 +48,6 @@ function formatCurrency(value: number) {
           <p class="text-xs font-medium uppercase text-muted">
             {{ item.label }}
           </p>
-          <UButton
-            v-if="item.key === 'income'"
-            label="Income"
-            icon="i-lucide-plus"
-            color="primary"
-            variant="soft"
-            size="md"
-            :aria-label="`Add income for ${periodLabel}`"
-            @click="emit('add-income')"
-          />
         </div>
         <p class="mt-2 text-lg font-semibold tracking-normal text-highlighted">
           {{ formatCurrency(item.value) }}

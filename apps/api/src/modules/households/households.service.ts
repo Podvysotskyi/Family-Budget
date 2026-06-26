@@ -1,7 +1,4 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { BudgetIncomeRepository } from '../budget-income/budget-income.repository'
-import type { SaveBudgetIncomeDto } from '../budget-income/dto/save-budget-income.dto'
-import type { BudgetIncomeEntity } from '../budget-income/entities/budget-income.entity'
 import { BudgetCategoriesRepository } from '../budget-categories/budget-categories.repository'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
@@ -9,6 +6,9 @@ import type { BudgetCategoryEntity } from '../budget-categories/entities/budget-
 import { buildBudgetInputsForMonth } from '../budgets/budget-windows'
 import { BudgetsRepository, sortBudgetPeriods, toBudgetPeriod } from '../budgets/budgets.repository'
 import { BudgetType } from '../budgets/entities/budget-type'
+import type { SaveIncomeDto } from '../income/dto/save-income.dto'
+import type { IncomeEntity } from '../income/entities/income.entity'
+import { IncomeRepository } from '../income/income.repository'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
 import type { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { IncomeTypesRepository } from '../income-types/income-types.repository'
@@ -21,13 +21,15 @@ export interface BudgetMonthSelection {
   year: number
 }
 
+const householdBudgetUserId = 'household'
+
 @Injectable()
 export class HouseholdService {
   constructor(
-    @Inject(BudgetIncomeRepository) private readonly budgetIncomeRepository: BudgetIncomeRepository,
     @Inject(BudgetCategoriesRepository) private readonly budgetCategoriesRepository: BudgetCategoriesRepository,
     @Inject(BudgetsRepository) private readonly budgetsRepository: BudgetsRepository,
     @Inject(HouseholdsRepository) private readonly householdsRepository: HouseholdsRepository,
+    @Inject(IncomeRepository) private readonly incomeRepository: IncomeRepository,
     @Inject(IncomeTypesRepository) private readonly incomeTypesRepository: IncomeTypesRepository,
     @Inject(UsersRepository) private readonly usersRepository: UsersRepository
   ) {}
@@ -74,34 +76,6 @@ export class HouseholdService {
     }
   }
 
-  async getUserBudget(householdId: string, currentUserId: string, budgetUserId: string, budgetMonth: BudgetMonthSelection) {
-    const budgetUser = await this.requireBudgetUser(householdId, currentUserId, budgetUserId)
-
-    return {
-      household: {
-        id: budgetUser.householdId,
-        name: budgetUser.householdName
-      },
-      budgetUser: {
-        id: budgetUser.userId,
-        name: budgetUser.name,
-        email: budgetUser.email,
-        avatarUrl: budgetUser.avatarUrl
-      },
-      budgets: await this.getBudgetPeriodsForMonth(budgetUser.householdId, budgetMonth)
-    }
-  }
-
-  async getUserBudgetForCurrentUser(currentUserId: string, budgetUserId: string, budgetMonth: BudgetMonthSelection) {
-    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
-
-    if (!household) {
-      throw new NotFoundException('Household not found')
-    }
-
-    return this.getUserBudget(household.householdId, currentUserId, budgetUserId, budgetMonth)
-  }
-
   async getUserBudgetMonthPeriodForCurrentUser(
     currentUserId: string,
     budgetUserId: string,
@@ -113,8 +87,8 @@ export class HouseholdService {
       throw new NotFoundException('Household not found')
     }
 
-    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
-    const budgets = await this.listBudgetPeriodEntitiesForMonth(budgetUser.householdId, budgetMonth)
+    const budgetHouseholdId = await this.getBudgetHouseholdId(household.householdId, currentUserId, budgetUserId)
+    const budgets = await this.listBudgetPeriodEntitiesForMonth(budgetHouseholdId, budgetMonth)
     const selectedBudget = budgets.find(budget => budget.type === BudgetType.Month)
 
     if (!selectedBudget) {
@@ -136,8 +110,8 @@ export class HouseholdService {
       throw new NotFoundException('Household not found')
     }
 
-    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
-    const budgets = await this.listBudgetPeriodEntitiesForMonth(budgetUser.householdId, budgetMonth)
+    const budgetHouseholdId = await this.getBudgetHouseholdId(household.householdId, currentUserId, budgetUserId)
+    const budgets = await this.listBudgetPeriodEntitiesForMonth(budgetHouseholdId, budgetMonth)
     const selectedBudget = budgets.find(budget => budget.type === BudgetType.Week && budget.startDate === startDate)
 
     if (!selectedBudget) {
@@ -168,60 +142,71 @@ export class HouseholdService {
     }
   }
 
-  async listBudgetIncomeForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string) {
+  async listIncomeForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string) {
     const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
 
     if (!household) {
       throw new NotFoundException('Household not found')
     }
 
-    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
-    const budget = await this.budgetsRepository.findByIdAndHouseholdId(budgetId, budgetUser.householdId)
+    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
 
-    if (!budget) {
-      throw new NotFoundException('Budget not found')
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+
+      return {
+        incomes: (await this.incomeRepository.listByHouseholdIdAndDateRange(
+          household.householdId,
+          budget.startDate,
+          budget.endDate
+        )).map(toIncome)
+      }
     }
 
+    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+
     return {
-      budgetIncomes: (await this.budgetIncomeRepository.listByBudgetIdAndUserId(budget.id, budgetUser.userId)).map(toBudgetIncome)
+      incomes: (await this.incomeRepository.listByUserIdAndDateRange(
+        budgetUser.userId,
+        budget.startDate,
+        budget.endDate
+      )).map(toIncome)
     }
   }
 
-  async createBudgetIncomeForCurrentUser(currentUserId: string, budgetUserId: string, input: SaveBudgetIncomeDto) {
+  async createIncomeForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string, input: SaveIncomeDto) {
     const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
 
     if (!household) {
       throw new NotFoundException('Household not found')
     }
 
-    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
-    const budgetId = getBudgetIncomeBudgetId(input)
-    const budget = await this.budgetsRepository.findByIdAndHouseholdId(budgetId, budgetUser.householdId)
+    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
 
-    if (!budget) {
-      throw new NotFoundException('Budget not found')
+    if (budgetUserId === householdBudgetUserId) {
+      throw new BadRequestException('Household income must be assigned to a household member')
     }
 
-    const incomeTypeId = getBudgetIncomeTypeId(input)
+    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+    const incomeTypeId = getIncomeTypeId(input)
     const incomeType = await this.incomeTypesRepository.findByIdAndHouseholdId(incomeTypeId, budgetUser.householdId)
 
     if (!incomeType) {
       throw new NotFoundException('Income type not found')
     }
 
-    const budgetIncome = await this.budgetIncomeRepository.create({
-      budgetId: budget.id,
+    const income = await this.incomeRepository.create({
       incomeTypeId: incomeType.id,
       userId: budgetUser.userId,
-      amount: getBudgetIncomeAmount(input),
-      date: getBudgetIncomeDate(input)
+      amount: getIncomeAmount(input),
+      date: getIncomeDate(input, budget)
     })
 
     return {
-      budgetIncome: toBudgetIncome({
-        ...budgetIncome,
+      income: toIncome({
+        ...income,
         incomeType
-      } as BudgetIncomeEntity)
+      } as IncomeEntity)
     }
   }
 
@@ -334,6 +319,28 @@ export class HouseholdService {
 
     return budgetUser
   }
+
+  private async getBudgetHouseholdId(householdId: string, currentUserId: string, budgetUserId: string) {
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(householdId, currentUserId)
+
+      return householdId
+    }
+
+    const budgetUser = await this.requireBudgetUser(householdId, currentUserId, budgetUserId)
+
+    return budgetUser.householdId
+  }
+
+  private async requireBudgetForHousehold(budgetId: string, householdId: string) {
+    const budget = await this.budgetsRepository.findByIdAndHouseholdId(budgetId, householdId)
+
+    if (!budget) {
+      throw new NotFoundException('Budget not found')
+    }
+
+    return budget
+  }
 }
 
 function getBudgetCategoryName(input: SaveBudgetCategoryDto) {
@@ -384,15 +391,7 @@ function toBudgetPeriodList(budgets: ReturnType<typeof sortBudgetPeriods>) {
   }
 }
 
-function getBudgetIncomeBudgetId(input: SaveBudgetIncomeDto) {
-  if (typeof input?.budgetId !== 'string' || !input.budgetId) {
-    throw new BadRequestException('Budget id is required')
-  }
-
-  return input.budgetId
-}
-
-function getBudgetIncomeTypeId(input: SaveBudgetIncomeDto) {
+function getIncomeTypeId(input: SaveIncomeDto) {
   if (typeof input?.incomeTypeId !== 'string' || !input.incomeTypeId) {
     throw new BadRequestException('Income type id is required')
   }
@@ -400,7 +399,7 @@ function getBudgetIncomeTypeId(input: SaveBudgetIncomeDto) {
   return input.incomeTypeId
 }
 
-function getBudgetIncomeAmount(input: SaveBudgetIncomeDto) {
+function getIncomeAmount(input: SaveIncomeDto) {
   const amount = Number(input?.amount)
 
   if (!Number.isFinite(amount) || amount <= 0) {
@@ -410,28 +409,29 @@ function getBudgetIncomeAmount(input: SaveBudgetIncomeDto) {
   return amount
 }
 
-function getBudgetIncomeDate(input: SaveBudgetIncomeDto) {
-  if (input?.date === undefined || input?.date === null || input?.date === '') {
-    return null
-  }
+function getIncomeDate(input: SaveIncomeDto, budget: { startDate: string, endDate: string }) {
+  const date = input?.date || budget.startDate
 
-  if (typeof input.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new BadRequestException('Income date must be in YYYY-MM-DD format')
   }
 
-  return input.date
+  if (date < budget.startDate || date > budget.endDate) {
+    throw new BadRequestException('Income date must be inside the budget period')
+  }
+
+  return date
 }
 
-function toBudgetIncome(budgetIncome: BudgetIncomeEntity) {
+function toIncome(income: IncomeEntity) {
   return {
-    id: budgetIncome.id,
-    budgetId: budgetIncome.budgetId,
-    incomeTypeId: budgetIncome.incomeTypeId,
-    incomeTypeText: budgetIncome.incomeType.text,
-    userId: budgetIncome.userId,
-    amount: budgetIncome.amount,
-    date: budgetIncome.date,
-    createdAt: budgetIncome.createdAt,
-    updatedAt: budgetIncome.updatedAt
+    id: income.id,
+    incomeTypeId: income.incomeTypeId,
+    incomeTypeText: income.incomeType.text,
+    userId: income.userId,
+    amount: income.amount,
+    date: income.date,
+    createdAt: income.createdAt,
+    updatedAt: income.updatedAt
   }
 }

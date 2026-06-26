@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
-import { BudgetIncomeModule } from '../budget-income/budget-income.module'
 import { BudgetCategoriesModule } from '../budget-categories/budget-categories.module'
 import { BudgetsModule } from '../budgets/budgets.module'
+import { IncomeModule } from '../income/income.module'
 import { IncomeTypesModule } from '../income-types/income-types.module'
 import { UsersModule } from '../users/users.module'
 import { HouseholdEntity } from './entities/household.entity'
@@ -13,9 +13,9 @@ import { UserBudgetsController } from './user-budgets.controller'
 
 @Module({
   imports: [
-    BudgetIncomeModule,
     BudgetCategoriesModule,
     BudgetsModule,
+    IncomeModule,
     IncomeTypesModule,
     UsersModule,
     TypeOrmModule.forFeature([

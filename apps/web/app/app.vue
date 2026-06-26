@@ -26,7 +26,9 @@ useSeoMeta({
 <template>
   <UApp>
     <UMain class="min-h-screen bg-muted/20">
-      <NuxtPage />
+      <NuxtLayout>
+        <NuxtPage />
+      </NuxtLayout>
     </UMain>
   </UApp>
 </template>

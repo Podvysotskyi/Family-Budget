@@ -1,6 +1,6 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
-import { BudgetIncomeEntity } from '../../budget-income/entities/budget-income.entity'
 import { HouseholdEntity } from '../../households/entities/household.entity'
+import { IncomeEntity } from '../../income/entities/income.entity'
 
 @Entity({ name: 'users' })
 @Index('users_email_unique', ['email'], { unique: true })
@@ -35,6 +35,6 @@ export class UserEntity {
   @JoinColumn({ name: 'household_id' })
   household!: HouseholdEntity
 
-  @OneToMany(() => BudgetIncomeEntity, income => income.user)
-  budgetIncomes!: BudgetIncomeEntity[]
+  @OneToMany(() => IncomeEntity, income => income.user)
+  incomes!: IncomeEntity[]
 }

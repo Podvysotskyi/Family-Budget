@@ -1,30 +1,14 @@
 import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common'
 import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
-import type { SaveBudgetIncomeDto } from '../budget-income/dto/save-budget-income.dto'
+import type { SaveIncomeDto } from '../income/dto/save-income.dto'
 import { HouseholdService } from './households.service'
 
-@Controller('users')
+@Controller()
 export class UserBudgetsController {
   constructor(@Inject(HouseholdService) private readonly householdService: HouseholdService) {}
 
-  @Get(':id/budget')
-  userBudget(
-    @Param('id') budgetUserId: string,
-    @Query('month') month: string | undefined,
-    @Query('year') year: string | undefined,
-    @Req() request: AuthenticatedRequest
-  ) {
-    const user = requireRequestUser(request)
-
-    if (!budgetUserId) {
-      throw new BadRequestException('User id is required')
-    }
-
-    return this.householdService.getUserBudgetForCurrentUser(user.id, budgetUserId, parseBudgetMonthQuery(month, year))
-  }
-
-  @Get(':id/budget-period/month')
+  @Get('users/:id/budget-period/month')
   userBudgetMonthPeriod(
     @Param('id') budgetUserId: string,
     @Query('month') month: string | undefined,
@@ -44,7 +28,7 @@ export class UserBudgetsController {
     )
   }
 
-  @Get(':id/budget-period/week')
+  @Get('users/:id/budget-period/week')
   userBudgetWeekPeriod(
     @Param('id') budgetUserId: string,
     @Query('month') month: string | undefined,
@@ -66,10 +50,10 @@ export class UserBudgetsController {
     )
   }
 
-  @Get(':id/budget-income')
-  userBudgetIncome(
+  @Get('user/:id/budget/:budgetId/income')
+  userIncome(
     @Param('id') budgetUserId: string,
-    @Query('budgetId') budgetId: string | undefined,
+    @Param('budgetId') budgetId: string,
     @Req() request: AuthenticatedRequest
   ) {
     const user = requireRequestUser(request)
@@ -78,13 +62,18 @@ export class UserBudgetsController {
       throw new BadRequestException('User id is required')
     }
 
-    return this.householdService.listBudgetIncomeForCurrentUser(user.id, budgetUserId, parseBudgetIdQuery(budgetId))
+    if (!budgetId) {
+      throw new BadRequestException('Budget id is required')
+    }
+
+    return this.householdService.listIncomeForCurrentUser(user.id, budgetUserId, budgetId)
   }
 
-  @Post(':id/budget-income')
-  createUserBudgetIncome(
+  @Post('user/:id/budget/:budgetId/income')
+  createUserIncome(
     @Param('id') budgetUserId: string,
-    @Body() input: SaveBudgetIncomeDto,
+    @Param('budgetId') budgetId: string,
+    @Body() input: SaveIncomeDto,
     @Req() request: AuthenticatedRequest
   ) {
     const user = requireRequestUser(request)
@@ -93,7 +82,11 @@ export class UserBudgetsController {
       throw new BadRequestException('User id is required')
     }
 
-    return this.householdService.createBudgetIncomeForCurrentUser(user.id, budgetUserId, input)
+    if (!budgetId) {
+      throw new BadRequestException('Budget id is required')
+    }
+
+    return this.householdService.createIncomeForCurrentUser(user.id, budgetUserId, budgetId, input)
   }
 }
 
@@ -122,12 +115,4 @@ function parseBudgetWeekStartDateQuery(startDate: string | undefined) {
   }
 
   return startDate
-}
-
-function parseBudgetIdQuery(budgetId: string | undefined) {
-  if (!budgetId) {
-    throw new BadRequestException('Budget id is required')
-  }
-
-  return budgetId
 }

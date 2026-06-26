@@ -205,7 +205,7 @@ function submit() {
         >
           <div class="flex items-center justify-between gap-3">
             <p class="text-sm font-medium text-highlighted">
-              Current budget income
+              Current income
             </p>
             <p class="text-sm font-semibold text-highlighted">
               {{ new Intl.NumberFormat(undefined, {

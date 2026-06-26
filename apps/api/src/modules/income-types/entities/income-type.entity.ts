@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
-import { BudgetIncomeEntity } from '../../budget-income/entities/budget-income.entity'
+import { IncomeEntity } from '../../income/entities/income.entity'
 import { HouseholdEntity } from '../../households/entities/household.entity'
 
 @Entity({ name: 'income_types' })
@@ -25,6 +25,6 @@ export class IncomeTypeEntity {
   @JoinColumn({ name: 'household_id' })
   household!: HouseholdEntity
 
-  @OneToMany(() => BudgetIncomeEntity, income => income.incomeType)
-  budgetIncomes!: BudgetIncomeEntity[]
+  @OneToMany(() => IncomeEntity, income => income.incomeType)
+  incomes!: IncomeEntity[]
 }
