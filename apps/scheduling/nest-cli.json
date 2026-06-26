@@ -1,0 +1,10 @@
+{
+  "$schema": "../../node_modules/@nestjs/cli/lib/configuration/schema.json",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "apps/scheduling/src",
+  "entryFile": "main",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "tsConfigPath": "apps/scheduling/tsconfig.app.json"
+  }
+}

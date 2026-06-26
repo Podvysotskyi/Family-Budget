@@ -1,0 +1,73 @@
+<script setup lang="ts">
+defineOptions({
+  name: 'MonthlySummaryPanel'
+})
+
+type SummaryItem = {
+  key: string
+  label: string
+  value: number
+}
+
+const props = defineProps<{
+  dateRange: string
+  items: SummaryItem[]
+  periodLabel: string
+  title: string
+}>()
+
+const emit = defineEmits<{
+  'add-income': []
+}>()
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value)
+}
+</script>
+
+<template>
+  <section class="mb-6 rounded-lg border border-default bg-default">
+    <div class="border-b border-default px-4 py-3">
+      <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h2 class="text-base font-semibold text-highlighted">
+          {{ title }}
+        </h2>
+        <p class="text-sm text-muted">
+          {{ dateRange }}
+        </p>
+      </div>
+    </div>
+
+    <div class="grid gap-3 p-4 md:grid-cols-3">
+      <section
+        v-for="item in props.items"
+        :key="item.key"
+        class="rounded-lg border border-default px-4 py-3"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <p class="text-xs font-medium uppercase text-muted">
+            {{ item.label }}
+          </p>
+          <UButton
+            v-if="item.key === 'income'"
+            label="Income"
+            icon="i-lucide-plus"
+            color="primary"
+            variant="soft"
+            size="md"
+            :aria-label="`Add income for ${periodLabel}`"
+            @click="emit('add-income')"
+          />
+        </div>
+        <p class="mt-2 text-lg font-semibold tracking-normal text-highlighted">
+          {{ formatCurrency(item.value) }}
+        </p>
+      </section>
+    </div>
+  </section>
+</template>
