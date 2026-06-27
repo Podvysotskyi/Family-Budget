@@ -32,7 +32,7 @@ export const useDashboardStore = defineStore('dashboard', {
     members: state => state.data?.members || [],
     householdId: state => state.data?.household?.householdId || '',
     householdName: state => state.data?.household?.householdName || '',
-    defaultBudgetUserId: state => {
+    defaultBudgetUserId: (state) => {
       return state.data?.members.find(member => member.userId === state.data?.user.id)?.userId
         || state.data?.members[0]?.userId
         || state.data?.user.id

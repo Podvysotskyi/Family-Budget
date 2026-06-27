@@ -140,7 +140,7 @@ const highlights = [
               </p>
             </div>
             <div class="flex items-center gap-2 rounded-md bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-              <span class="size-2 rounded-full bg-primary"></span>
+              <span class="size-2 rounded-full bg-primary" />
               Active
             </div>
           </div>
@@ -184,7 +184,7 @@ const highlights = [
                     <div
                       class="h-full rounded-full bg-primary"
                       :style="{ width: week.progress }"
-                    ></div>
+                    />
                   </div>
                   <p class="text-right text-sm font-medium text-muted">
                     {{ week.value }}

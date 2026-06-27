@@ -9,7 +9,7 @@ const amountTransformer = {
 
 @Entity({ name: 'goal_targets' })
 @Index('goal_targets_goal_id_idx', ['goalId'])
-@Index('goal_targets_goal_date_type_unique', ['goalId', 'date', 'type'], { unique: true })
+@Index('goal_targets_goal_date_unique', ['goalId', 'date'], { unique: true })
 export class GoalTargetEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string

@@ -9,6 +9,10 @@ import { BudgetType } from '../budgets/entities/budget-type'
 import { CreditCardsRepository } from '../credit-cards/credit-cards.repository'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { CreditCardEntity } from '../credit-cards/entities/credit-card.entity'
+import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
+import type { GoalEntity } from '../goals/entities/goal.entity'
+import { GoalTargetType } from '../goals/entities/goal-target-type'
+import { GoalsRepository } from '../goals/goals.repository'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
 import type { IncomeEntity } from '../income/entities/income.entity'
 import { IncomeRepository } from '../income/income.repository'
@@ -42,6 +46,7 @@ export class HouseholdService {
     @Inject(BudgetCategoriesRepository) private readonly budgetCategoriesRepository: BudgetCategoriesRepository,
     @Inject(BudgetsRepository) private readonly budgetsRepository: BudgetsRepository,
     @Inject(CreditCardsRepository) private readonly creditCardsRepository: CreditCardsRepository,
+    @Inject(GoalsRepository) private readonly goalsRepository: GoalsRepository,
     @Inject(HouseholdsRepository) private readonly householdsRepository: HouseholdsRepository,
     @Inject(IncomeRepository) private readonly incomeRepository: IncomeRepository,
     @Inject(IncomeTypesRepository) private readonly incomeTypesRepository: IncomeTypesRepository,
@@ -651,6 +656,132 @@ export class HouseholdService {
     }
   }
 
+  async listGoals(householdId: string, userId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const goals = await this.goalsRepository.listByHouseholdId(householdId)
+
+    return {
+      goals: await Promise.all(goals
+        .filter(goal => !goal.userId || goal.userId === userId)
+        .map(goal => this.toGoal(goal)))
+    }
+  }
+
+  async createGoal(householdId: string, userId: string, input: SaveGoalDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const goalUserId = await this.getGoalUserId(householdId, input)
+
+    if (goalUserId && goalUserId !== userId) {
+      throw new ForbiddenException('Goals can only be created for current user or household')
+    }
+
+    const startDate = getGoalStartDate(input)
+    const endDate = getGoalEndDate(input, startDate)
+    const goal = await this.goalsRepository.create(
+      {
+        householdId,
+        name: getGoalName(input),
+        userId: goalUserId,
+        startDate,
+        endDate,
+        includeInBudget: getGoalIncludeInBudget(input)
+      },
+      {
+        amount: getGoalTargetAmount(input),
+        date: getCurrentDateKey(),
+        type: getGoalTargetType(input)
+      }
+    )
+
+    if (!goal) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    return {
+      goal: await this.toGoal(goal)
+    }
+  }
+
+  async updateGoal(householdId: string, userId: string, goalId: string, input: SaveGoalDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const currentGoal = await this.goalsRepository.findByIdAndHouseholdId(goalId, householdId)
+
+    if (!currentGoal || (currentGoal.userId && currentGoal.userId !== userId)) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    const goalUserId = await this.getGoalUserId(householdId, input)
+
+    if (goalUserId && goalUserId !== userId) {
+      throw new ForbiddenException('Goals can only be assigned to current user or household')
+    }
+
+    const startDate = getGoalStartDate(input)
+    const endDate = getGoalEndDate(input, startDate)
+    const goal = await this.goalsRepository.update(
+      householdId,
+      goalId,
+      {
+        name: getGoalName(input),
+        userId: goalUserId,
+        startDate,
+        endDate,
+        includeInBudget: getGoalIncludeInBudget(input)
+      },
+      {
+        amount: getGoalTargetAmount(input),
+        date: getCurrentDateKey(),
+        type: getGoalTargetType(input)
+      }
+    )
+
+    if (!goal) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    return {
+      goal: await this.toGoal(goal)
+    }
+  }
+
+  async deleteGoal(householdId: string, userId: string, goalId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const goal = await this.goalsRepository.findByIdAndHouseholdId(goalId, householdId)
+
+    if (!goal || (goal.userId && goal.userId !== userId)) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    await this.goalsRepository.end(householdId, goalId, getCurrentDateKey())
+
+    return {
+      deleted: true
+    }
+  }
+
+  async permanentlyDeleteGoal(householdId: string, userId: string, goalId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const goal = await this.goalsRepository.findByIdAndHouseholdId(goalId, householdId)
+
+    if (!goal || (goal.userId && goal.userId !== userId)) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    if (await this.goalsRepository.hasTransactions(goal.id)) {
+      throw new BadRequestException('Goals with transactions cannot be permanently deleted')
+    }
+
+    const deleted = await this.goalsRepository.delete(householdId, goalId)
+
+    if (!deleted) {
+      throw new NotFoundException('Goal not found')
+    }
+
+    return {
+      deleted: true
+    }
+  }
+
   private async getBudgetPeriodsForMonth(householdId: string, budgetMonth: BudgetMonthSelection) {
     return toBudgetPeriodList(await this.listBudgetPeriodEntitiesForMonth(householdId, budgetMonth))
   }
@@ -754,6 +885,64 @@ export class HouseholdService {
     }
 
     return user.id
+  }
+
+  private async getGoalUserId(householdId: string, input: SaveGoalDto) {
+    const userId = typeof input?.userId === 'string' && input.userId.trim() ? input.userId.trim() : null
+
+    if (!userId) {
+      return null
+    }
+
+    const user = await this.usersRepository.findByHouseholdIdAndUserId(householdId, userId)
+
+    if (!user) {
+      throw new NotFoundException('Goal user not found')
+    }
+
+    return user.id
+  }
+
+  private async toGoal(goal: GoalEntity) {
+    const sortedTargets = [...(goal.targets || [])]
+      .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))
+    const transactionCount = await this.goalsRepository.countTransactions(goal.id)
+
+    return {
+      id: goal.id,
+      householdId: goal.householdId,
+      name: goal.name,
+      userId: goal.userId,
+      user: goal.user
+        ? {
+            userId: goal.user.id,
+            name: goal.user.name,
+            email: goal.user.email,
+            avatarUrl: goal.user.avatarUrl
+          }
+        : null,
+      startDate: goal.startDate,
+      endDate: goal.endDate,
+      includeInBudget: goal.includeInBudget,
+      currentTarget: sortedTargets[0]
+        ? {
+            id: sortedTargets[0].id,
+            date: sortedTargets[0].date,
+            type: sortedTargets[0].type,
+            amount: sortedTargets[0].amount
+          }
+        : null,
+      targets: sortedTargets.map(target => ({
+        id: target.id,
+        date: target.date,
+        type: target.type,
+        amount: target.amount
+      })),
+      transactionCount,
+      canDeletePermanently: transactionCount === 0,
+      createdAt: goal.createdAt,
+      updatedAt: goal.updatedAt
+    }
   }
 
   private async requireBudgetForHousehold(budgetId: string, householdId: string) {
@@ -939,6 +1128,70 @@ function getCreditCardLimit(input: SaveCreditCardDto) {
   return limit
 }
 
+function getGoalName(input: SaveGoalDto) {
+  const name = typeof input?.name === 'string' ? input.name.trim() : ''
+
+  if (!name) {
+    throw new BadRequestException('Goal name is required')
+  }
+
+  return name
+}
+
+function getGoalStartDate(input: SaveGoalDto) {
+  const startDate = typeof input?.startDate === 'string' ? input.startDate : ''
+
+  if (!isDateString(startDate)) {
+    throw new BadRequestException('Goal start date must be in YYYY-MM-DD format')
+  }
+
+  return startDate
+}
+
+function getGoalEndDate(input: SaveGoalDto, startDate: string) {
+  const endDate = typeof input?.endDate === 'string' && input.endDate ? input.endDate : null
+
+  if (!endDate) {
+    return null
+  }
+
+  if (!isDateString(endDate)) {
+    throw new BadRequestException('Goal end date must be in YYYY-MM-DD format')
+  }
+
+  if (endDate < startDate) {
+    throw new BadRequestException('Goal end date must be on or after the start date')
+  }
+
+  return endDate
+}
+
+function getGoalIncludeInBudget(input: SaveGoalDto) {
+  return input?.includeInBudget !== false
+}
+
+function getGoalTargetType(input: SaveGoalDto) {
+  if (
+    input?.targetType === GoalTargetType.Monthly
+    || input?.targetType === GoalTargetType.Weekly
+    || input?.targetType === GoalTargetType.Total
+  ) {
+    return input.targetType
+  }
+
+  throw new BadRequestException('Goal target type must be monthly, weekly, or total')
+}
+
+function getGoalTargetAmount(input: SaveGoalDto) {
+  const amount = Number(input?.targetAmount)
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new BadRequestException('Goal target amount must be greater than zero')
+  }
+
+  return amount
+}
+
 function getCurrentDateKey() {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: process.env.SCHEDULING_TIMEZONE || 'America/Chicago',
@@ -952,7 +1205,7 @@ function getCurrentDateKey() {
   const day = parts.find(part => part.type === 'day')?.value
 
   if (!year || !month || !day) {
-    throw new Error('Could not determine current subscription date')
+    throw new Error('Could not determine current date')
   }
 
   return `${year}-${month}-${day}`
@@ -1012,7 +1265,7 @@ function toCreditCard(creditCard: CreditCardEntity) {
     startDate: creditCard.startDate,
     endDate: creditCard.endDate,
     dueDate: creditCard.dueDate,
-    currentLimit: sortedLimits[0]?.limit || null,
+    currentLimit: getCreditCardLimitForDate(creditCard, getCurrentDateKey()),
     limits: sortedLimits.map(limit => ({
       id: limit.id,
       date: limit.date,
@@ -1021,6 +1274,21 @@ function toCreditCard(creditCard: CreditCardEntity) {
     createdAt: creditCard.createdAt,
     updatedAt: creditCard.updatedAt
   }
+}
+
+function getCreditCardLimitForDate(creditCard: CreditCardEntity, date: string) {
+  const sortedLimits = [...(creditCard.limits || [])].sort((first, second) => first.date.localeCompare(second.date))
+  let effectiveLimit: number | null = null
+
+  for (const limit of sortedLimits) {
+    if (limit.date > date) {
+      break
+    }
+
+    effectiveLimit = limit.limit
+  }
+
+  return effectiveLimit ?? sortedLimits[0]?.limit ?? null
 }
 
 function toBudgetSubscriptions(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {

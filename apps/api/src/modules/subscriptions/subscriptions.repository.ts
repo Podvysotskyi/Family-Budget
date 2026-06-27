@@ -152,8 +152,11 @@ export class SubscriptionsRepository {
       })
 
       await manager.save(SubscriptionEntity, subscription)
-      if (shouldUpsertSubscriptionAmount(subscription.amounts || [], input.amountEffectiveDate, input.amount)) {
+      const shouldUpdateAmount = shouldUpsertSubscriptionAmount(subscription.amounts || [], input.amountEffectiveDate, input.amount)
+
+      if (shouldUpdateAmount) {
         await this.upsertSubscriptionAmount(manager, subscription.id, input.amountEffectiveDate, input.amount)
+        await this.deleteTransactionsAfterDateWithManager(manager, subscription.id, input.amountEffectiveDate)
       }
       await this.ensureSubscriptionDates(manager, [subscription], input.ensureDatesThroughDate)
 
@@ -328,6 +331,13 @@ export class SubscriptionsRepository {
       })
       .orUpdate(['amount'], ['subscription_id', 'date'])
       .execute()
+  }
+
+  private async deleteTransactionsAfterDateWithManager(manager: EntityManager, subscriptionId: string, date: string) {
+    await manager.delete(SubscriptionTransactionEntity, {
+      subscriptionId,
+      date: MoreThan(date)
+    })
   }
 
   private async ensureSubscriptionDates(manager: EntityManager, subscriptions: SubscriptionEntity[], throughDate: string) {

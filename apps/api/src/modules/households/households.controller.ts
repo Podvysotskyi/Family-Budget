@@ -4,6 +4,7 @@ import { requireRequestUser } from '../auth/request-user'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
+import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
 import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
@@ -317,6 +318,90 @@ export class HouseholdsController {
     }
 
     return this.householdService.deleteCreditCard(householdId, user.id, creditCardId)
+  }
+
+  @Get(':id/goals')
+  goals(@Param('id') householdId: string, @Req() request: AuthenticatedRequest) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.listGoals(householdId, user.id)
+  }
+
+  @Post(':id/goals')
+  createGoal(
+    @Param('id') householdId: string,
+    @Body() input: SaveGoalDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.createGoal(householdId, user.id, input)
+  }
+
+  @Patch(':id/goals/:goalId')
+  updateGoal(
+    @Param('id') householdId: string,
+    @Param('goalId') goalId: string,
+    @Body() input: SaveGoalDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!goalId) {
+      throw new BadRequestException('Goal id is required')
+    }
+
+    return this.householdService.updateGoal(householdId, user.id, goalId, input)
+  }
+
+  @Delete(':id/goals/:goalId')
+  deleteGoal(
+    @Param('id') householdId: string,
+    @Param('goalId') goalId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!goalId) {
+      throw new BadRequestException('Goal id is required')
+    }
+
+    return this.householdService.deleteGoal(householdId, user.id, goalId)
+  }
+
+  @Delete(':id/goals/:goalId/permanent')
+  permanentlyDeleteGoal(
+    @Param('id') householdId: string,
+    @Param('goalId') goalId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!goalId) {
+      throw new BadRequestException('Goal id is required')
+    }
+
+    return this.householdService.permanentlyDeleteGoal(householdId, user.id, goalId)
   }
 }
 

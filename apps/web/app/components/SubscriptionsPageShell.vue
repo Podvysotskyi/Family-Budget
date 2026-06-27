@@ -16,7 +16,6 @@ const props = defineProps<{
 
 const unassignedUserValue = 'household'
 const allSubscriptionsValue = 'all'
-const route = useRoute()
 const dashboardStore = useDashboardStore()
 const subscriptionsStore = useSubscriptionsStore()
 await dashboardStore.fetchDashboard()
