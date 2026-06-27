@@ -466,7 +466,8 @@ export class HouseholdService {
       type: getSubscriptionType(input),
       startDate: getSubscriptionStartDate(input),
       endDate: getSubscriptionEndDate(input),
-      amount: getSubscriptionAmount(input)
+      amount: getSubscriptionAmount(input),
+      autopay: getSubscriptionAutopay(input)
     })
 
     const savedSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscription.id, householdId)
@@ -485,7 +486,8 @@ export class HouseholdService {
       type: getSubscriptionType(input),
       startDate: getSubscriptionStartDate(input),
       endDate: getSubscriptionEndDate(input),
-      amount: getSubscriptionAmount(input)
+      amount: getSubscriptionAmount(input),
+      autopay: getSubscriptionAutopay(input)
     })
 
     if (!subscription) {
@@ -704,6 +706,10 @@ function getSubscriptionAmount(input: SaveSubscriptionDto) {
   return amount
 }
 
+function getSubscriptionAutopay(input: SaveSubscriptionDto) {
+  return input?.autopay === true
+}
+
 function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
@@ -726,6 +732,7 @@ function toSubscription(subscription: SubscriptionEntity) {
     startDate: subscription.startDate,
     endDate: subscription.endDate,
     amount: subscription.amount,
+    autopay: subscription.autopay,
     createdAt: subscription.createdAt,
     updatedAt: subscription.updatedAt
   }

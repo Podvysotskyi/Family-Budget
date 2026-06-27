@@ -27,7 +27,8 @@
     "../api/src/modules/database/interfaces/database-config.interface.ts",
     "../api/src/modules/households/entities/**/*.ts",
     "../api/src/modules/households/households.repository.ts",
-    "../api/src/modules/users/entities/**/*.ts"
+    "../api/src/modules/subscriptions/**/*.ts",
+    "../api/src/modules/users/**/*.ts"
   ],
   "exclude": ["dist", "node_modules"]
 }

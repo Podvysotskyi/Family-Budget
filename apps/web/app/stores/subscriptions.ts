@@ -15,6 +15,7 @@ export type Subscription = {
   startDate: string
   endDate: string | null
   amount: number
+  autopay: boolean
   createdAt: string
   updatedAt: string
 }
@@ -26,6 +27,7 @@ export type SaveSubscriptionInput = {
   startDate: string
   endDate: string | null
   amount: number
+  autopay: boolean
 }
 
 export const useSubscriptionsStore = defineStore('subscriptions', {

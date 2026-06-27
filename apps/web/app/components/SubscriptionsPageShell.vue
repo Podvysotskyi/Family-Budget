@@ -43,6 +43,7 @@ const subscriptionType = ref<SubscriptionType>('monthly')
 const subscriptionStartDate = ref(getTodayDate())
 const subscriptionEndDate = ref('')
 const subscriptionAmount = ref('')
+const subscriptionAutopay = ref(false)
 const typeOptions = [
   {
     label: 'Monthly',
@@ -130,6 +131,7 @@ function resetForm() {
   subscriptionStartDate.value = getTodayDate()
   subscriptionEndDate.value = ''
   subscriptionAmount.value = ''
+  subscriptionAutopay.value = false
 }
 
 function startCreatingSubscription() {
@@ -167,6 +169,7 @@ function startEditingSubscription(subscription: Subscription) {
   subscriptionStartDate.value = subscription.startDate
   subscriptionEndDate.value = subscription.endDate || ''
   subscriptionAmount.value = String(subscription.amount)
+  subscriptionAutopay.value = subscription.autopay
   isSubscriptionModalOpen.value = true
 
   if (import.meta.client) {
@@ -233,7 +236,8 @@ async function saveSubscription() {
       type: subscriptionType.value,
       startDate: subscriptionStartDate.value,
       endDate: subscriptionEndDate.value || null,
-      amount: parsedSubscriptionAmount.value
+      amount: parsedSubscriptionAmount.value,
+      autopay: subscriptionAutopay.value
     }
 
     if (editingSubscriptionId.value) {
@@ -282,7 +286,8 @@ async function cancelSubscription() {
       type: subscriptionPendingCancel.value.type,
       startDate: subscriptionPendingCancel.value.startDate,
       endDate: cancellationEffectiveDate.value,
-      amount: subscriptionPendingCancel.value.amount
+      amount: subscriptionPendingCancel.value.amount,
+      autopay: subscriptionPendingCancel.value.autopay
     })
     closeCancellationModal()
   } catch {
@@ -529,6 +534,12 @@ function getTodayDate() {
                 variant="subtle"
                 :label="getSubscriptionTypeLabel(subscription.type)"
               />
+              <UBadge
+                v-if="subscription.autopay"
+                color="primary"
+                variant="subtle"
+                label="Autopay"
+              />
             </div>
             <p class="mt-1 text-sm text-muted">
               {{ getSubscriptionAssignmentLabel(subscription) }} · {{ formatCurrency(subscription.amount) }} · {{ formatDate(subscription.startDate) }} - {{ formatDate(subscription.endDate) }}
@@ -703,6 +714,15 @@ function getTodayDate() {
                 />
               </div>
             </div>
+          </div>
+
+          <div class="rounded-lg border border-default px-3 py-2">
+            <USwitch
+              v-model="subscriptionAutopay"
+              label="Autopay"
+              description="Automatically mark this subscription as paid on its due date."
+              :disabled="pending || isSavingSubscription || !householdId"
+            />
           </div>
 
           <p

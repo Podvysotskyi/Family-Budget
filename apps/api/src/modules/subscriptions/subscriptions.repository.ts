@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import type { SelectQueryBuilder, Repository } from 'typeorm'
+import { Brackets, type SelectQueryBuilder, type Repository } from 'typeorm'
 import { BudgetSubscriptionTransactionEntity } from './entities/budget-subscription-transaction.entity'
 import { SubscriptionTransactionEntity } from './entities/subscription-transaction.entity'
 import { SubscriptionEntity } from './entities/subscription.entity'
-import type { SubscriptionType } from './entities/subscription-type'
+import { SubscriptionType } from './entities/subscription-type'
 
 export interface SaveSubscriptionInput {
   householdId: string
@@ -14,6 +14,7 @@ export interface SaveSubscriptionInput {
   startDate: string
   endDate: string | null
   amount: number
+  autopay: boolean
 }
 
 export interface CreateSubscriptionTransactionInput {
@@ -57,6 +58,29 @@ export class SubscriptionsRepository {
       .where('subscription.user_id = :userId', { userId })
       .andWhere('subscription.start_date <= :endDate', { endDate })
       .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :startDate)', { startDate }))
+      .getMany()
+  }
+
+  listAutopayDueByDate(date: string) {
+    return orderSubscriptions(this.subscriptionsRepository
+      .createQueryBuilder('subscription')
+      .where('subscription.autopay = true')
+      .andWhere('subscription.start_date <= :date', { date })
+      .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :date)', { date })
+      .andWhere(new Brackets((query) => {
+        query
+          .where('subscription.type = :monthlyType AND EXTRACT(DAY FROM subscription.start_date) = EXTRACT(DAY FROM CAST(:date AS date))', {
+            date,
+            monthlyType: SubscriptionType.Monthly
+          })
+          .orWhere(
+            'subscription.type = :yearlyType AND EXTRACT(MONTH FROM subscription.start_date) = EXTRACT(MONTH FROM CAST(:date AS date)) AND EXTRACT(DAY FROM subscription.start_date) = EXTRACT(DAY FROM CAST(:date AS date))',
+            {
+              date,
+              yearlyType: SubscriptionType.Yearly
+            }
+          )
+      })))
       .getMany()
   }
 

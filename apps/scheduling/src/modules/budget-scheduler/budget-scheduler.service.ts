@@ -2,8 +2,12 @@ import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { DataSource } from 'typeorm'
 import { BudgetsRepository } from '../../../../api/src/modules/budgets/budgets.repository'
+import { BudgetType } from '../../../../api/src/modules/budgets/entities/budget-type'
 import { HouseholdsRepository } from '../../../../api/src/modules/households/households.repository'
-import { buildBudgetInputsAroundCurrentMonth } from './budget-windows'
+import type { SubscriptionEntity } from '../../../../api/src/modules/subscriptions/entities/subscription.entity'
+import { SubscriptionsRepository } from '../../../../api/src/modules/subscriptions/subscriptions.repository'
+import { UsersRepository } from '../../../../api/src/modules/users/users.repository'
+import { buildBudgetInputsAroundCurrentMonth, buildBudgetInputsForMonth } from './budget-windows'
 
 const advisoryLockId = 42_202_601
 
@@ -18,7 +22,11 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
     @Inject(DataSource)
     private readonly dataSource: DataSource,
     @Inject(HouseholdsRepository)
-    private readonly householdsRepository: HouseholdsRepository
+    private readonly householdsRepository: HouseholdsRepository,
+    @Inject(SubscriptionsRepository)
+    private readonly subscriptionsRepository: SubscriptionsRepository,
+    @Inject(UsersRepository)
+    private readonly usersRepository: UsersRepository
   ) {}
 
   async onApplicationBootstrap() {
@@ -37,6 +45,7 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
 
       if (this.isMidnightInTimeZone()) {
         await this.syncActiveBudgetPeriods()
+        await this.processSubscriptionAutopay()
       }
     })
   }
@@ -48,12 +57,101 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
     this.logger.log(`Budget period activation updated ${updatedCount} budgets for ${referenceDate}`)
   }
 
+  async processSubscriptionAutopay() {
+    const referenceDate = this.getCurrentDateKey()
+    const subscriptions = await this.subscriptionsRepository.listAutopayDueByDate(referenceDate)
+    const fallbackUserIdsByHouseholdId = new Map<string, string | null>()
+    let paidCount = 0
+    let skippedCount = 0
+
+    for (const subscription of subscriptions) {
+      try {
+        const paid = await this.processSubscriptionAutopayItem(
+          subscription,
+          referenceDate,
+          fallbackUserIdsByHouseholdId
+        )
+
+        if (paid) {
+          paidCount += 1
+        } else {
+          skippedCount += 1
+        }
+      } catch (error) {
+        skippedCount += 1
+        this.logger.error(
+          `Subscription autopay failed for subscription ${subscription.id}`,
+          error instanceof Error ? error.stack : undefined
+        )
+      }
+    }
+
+    this.logger.log(`Subscription autopay scanned ${subscriptions.length} subscriptions for ${referenceDate}, paid ${paidCount}, skipped ${skippedCount}`)
+  }
+
   private isEnabled() {
     return process.env.SCHEDULING_ENABLED !== 'false'
   }
 
   private getTimeZone() {
     return process.env.SCHEDULING_TIMEZONE || 'America/Chicago'
+  }
+
+  private async processSubscriptionAutopayItem(
+    subscription: SubscriptionEntity,
+    referenceDate: string,
+    fallbackUserIdsByHouseholdId: Map<string, string | null>
+  ) {
+    const transactionUserId = subscription.userId
+      || await this.getFallbackSubscriptionTransactionUserId(subscription.householdId, fallbackUserIdsByHouseholdId)
+
+    if (!transactionUserId) {
+      this.logger.warn(`Skipping subscription autopay for ${subscription.id} because household ${subscription.householdId} has no members`)
+      return false
+    }
+
+    const referenceDateParts = parseDateParts(referenceDate)
+    await this.budgetsRepository.ensureBudgets(buildBudgetInputsForMonth(
+      [subscription.householdId],
+      referenceDateParts.year,
+      referenceDateParts.month
+    ))
+
+    const occurrenceBudgets = await this.budgetsRepository.listByHouseholdIdAndDate(
+      subscription.householdId,
+      referenceDate
+    )
+    const monthBudget = occurrenceBudgets.find(budget => budget.type === BudgetType.Month)
+    const weekBudget = occurrenceBudgets.find(budget => budget.type === BudgetType.Week)
+
+    if (!monthBudget || !weekBudget) {
+      this.logger.warn(`Skipping subscription autopay for ${subscription.id} because budgets for ${referenceDate} were not found`)
+      return false
+    }
+
+    await this.subscriptionsRepository.createSubscriptionTransaction({
+      amount: subscription.amount,
+      budgetIds: [monthBudget.id, weekBudget.id],
+      subscriptionId: subscription.id,
+      userId: transactionUserId
+    })
+
+    return true
+  }
+
+  private async getFallbackSubscriptionTransactionUserId(
+    householdId: string,
+    fallbackUserIdsByHouseholdId: Map<string, string | null>
+  ) {
+    if (fallbackUserIdsByHouseholdId.has(householdId)) {
+      return fallbackUserIdsByHouseholdId.get(householdId) || null
+    }
+
+    const firstMember = (await this.usersRepository.listByHouseholdId(householdId))[0]
+    const userId = firstMember?.userId || null
+    fallbackUserIdsByHouseholdId.set(householdId, userId)
+
+    return userId
   }
 
   private async tryAcquireLock() {
@@ -132,5 +230,15 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
       hour: '2-digit',
       hour12: false
     }).formatToParts(new Date())
+  }
+}
+
+function parseDateParts(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return {
+    year,
+    month,
+    day
   }
 }

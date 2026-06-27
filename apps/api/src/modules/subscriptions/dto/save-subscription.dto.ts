@@ -7,4 +7,5 @@ export class SaveSubscriptionDto {
   startDate?: string
   endDate?: string | null
   amount?: number
+  autopay?: boolean
 }

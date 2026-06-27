@@ -47,6 +47,9 @@ export class SubscriptionEntity {
   @Column({ type: 'numeric', precision: 12, scale: 2, transformer: amountTransformer })
   amount!: number
 
+  @Column({ type: 'boolean', default: false })
+  autopay!: boolean
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date
 
