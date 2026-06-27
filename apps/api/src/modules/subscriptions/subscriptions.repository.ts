@@ -22,19 +22,15 @@ export class SubscriptionsRepository {
   ) {}
 
   listByHouseholdId(householdId: string) {
-    return this.subscriptionsRepository.find({
-      where: {
-        householdId
-      },
-      relations: {
-        user: true
-      },
-      order: {
-        name: 'ASC',
-        startDate: 'ASC',
-        createdAt: 'ASC'
-      }
-    })
+    return this.subscriptionsRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .where('subscription.household_id = :householdId', { householdId })
+      .orderBy('EXTRACT(DAY FROM subscription.start_date)', 'ASC')
+      .addOrderBy('subscription.start_date', 'ASC')
+      .addOrderBy('subscription.name', 'ASC')
+      .addOrderBy('subscription.created_at', 'ASC')
+      .getMany()
   }
 
   create(input: SaveSubscriptionInput) {
