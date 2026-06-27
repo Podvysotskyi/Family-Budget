@@ -8,7 +8,6 @@ export interface SaveSubscriptionInput {
   householdId: string
   name: string
   userId: string | null
-  parentId: string | null
   type: SubscriptionType
   startDate: string
   endDate: string | null

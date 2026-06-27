@@ -5,7 +5,6 @@ export type Subscription = {
   householdId: string
   name: string
   userId: string | null
-  parentId: string | null
   user: {
     userId: string
     name?: string | null
@@ -23,7 +22,6 @@ export type Subscription = {
 export type SaveSubscriptionInput = {
   name: string
   userId: string | null
-  parentId?: string | null
   type: SubscriptionType
   startDate: string
   endDate: string | null

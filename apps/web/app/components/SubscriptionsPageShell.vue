@@ -31,6 +31,9 @@ const subscriptionPendingCancel = ref<Subscription | null>(null)
 const cancelingSubscriptionId = ref<string | null>(null)
 const cancellationEffectiveDate = ref(getTodayDate())
 const cancellationError = ref<string | null>(null)
+const subscriptionPendingDelete = ref<Subscription | null>(null)
+const deletingSubscriptionId = ref<string | null>(null)
+const deletionError = ref<string | null>(null)
 const editingSubscriptionId = ref<string | null>(null)
 const formError = ref<string | null>(null)
 const isSubscriptionModalOpen = ref(false)
@@ -183,6 +186,16 @@ function closeCancellationModal() {
   cancellationEffectiveDate.value = getTodayDate()
 }
 
+function startDeletingSubscription(subscription: Subscription) {
+  deletionError.value = null
+  subscriptionPendingDelete.value = subscription
+}
+
+function closeDeletionModal() {
+  subscriptionPendingDelete.value = null
+  deletionError.value = null
+}
+
 async function saveSubscription() {
   formError.value = null
 
@@ -266,7 +279,6 @@ async function cancelSubscription() {
     await subscriptionsStore.updateSubscription(householdId.value, subscriptionPendingCancel.value.id, {
       name: subscriptionPendingCancel.value.name,
       userId: subscriptionPendingCancel.value.userId,
-      parentId: subscriptionPendingCancel.value.parentId,
       type: subscriptionPendingCancel.value.type,
       startDate: subscriptionPendingCancel.value.startDate,
       endDate: cancellationEffectiveDate.value,
@@ -277,6 +289,30 @@ async function cancelSubscription() {
     cancellationError.value = 'Subscription could not be canceled.'
   } finally {
     cancelingSubscriptionId.value = null
+  }
+}
+
+async function deleteSubscription() {
+  deletionError.value = null
+
+  if (!subscriptionPendingDelete.value) {
+    return
+  }
+
+  if (!householdId.value) {
+    deletionError.value = 'Household is required.'
+    return
+  }
+
+  deletingSubscriptionId.value = subscriptionPendingDelete.value.id
+
+  try {
+    await subscriptionsStore.deleteSubscription(householdId.value, subscriptionPendingDelete.value.id)
+    closeDeletionModal()
+  } catch {
+    deletionError.value = 'Subscription could not be deleted.'
+  } finally {
+    deletingSubscriptionId.value = null
   }
 }
 
@@ -505,7 +541,7 @@ function getTodayDate() {
               color="neutral"
               variant="ghost"
               aria-label="Edit subscription"
-              :disabled="cancelingSubscriptionId === subscription.id"
+              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
               @click="startEditingSubscription(subscription)"
             />
             <UButton
@@ -513,8 +549,16 @@ function getTodayDate() {
               color="warning"
               variant="ghost"
               aria-label="Cancel subscription"
-              :disabled="cancelingSubscriptionId === subscription.id"
+              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
               @click="startCancelingSubscription(subscription)"
+            />
+            <UButton
+              icon="i-lucide-trash-2"
+              color="error"
+              variant="ghost"
+              aria-label="Delete subscription"
+              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
+              @click="startDeletingSubscription(subscription)"
             />
           </div>
         </div>
@@ -758,5 +802,25 @@ function getTodayDate() {
         </div>
       </template>
     </UModal>
+
+    <ConfirmationModal
+      :open="Boolean(subscriptionPendingDelete)"
+      title="Delete subscription"
+      :description="subscriptionPendingDelete ? `Delete ${subscriptionPendingDelete.name}?` : ''"
+      confirm-label="Delete"
+      :is-confirming="Boolean(deletingSubscriptionId)"
+      @update:open="value => !value && closeDeletionModal()"
+      @confirm="deleteSubscription"
+    >
+      <div class="space-y-2">
+        <p>This subscription will be permanently removed from the household.</p>
+        <p
+          v-if="deletionError"
+          class="text-sm text-error"
+        >
+          {{ deletionError }}
+        </p>
+      </div>
+    </ConfirmationModal>
   </UContainer>
 </template>

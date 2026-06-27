@@ -5,7 +5,6 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
-  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm'
@@ -21,7 +20,6 @@ const amountTransformer = {
 @Entity({ name: 'subscriptions' })
 @Index('subscriptions_household_id_idx', ['householdId'])
 @Index('subscriptions_user_id_idx', ['userId'])
-@Index('subscriptions_parent_id_idx', ['parentId'])
 @Index('subscriptions_household_name_user_unique', ['householdId', 'name', 'userId'], { unique: true, where: '"user_id" IS NOT NULL' })
 @Index('subscriptions_household_name_unassigned_unique', ['householdId', 'name'], { unique: true, where: '"user_id" IS NULL' })
 export class SubscriptionEntity {
@@ -36,9 +34,6 @@ export class SubscriptionEntity {
 
   @Column({ name: 'user_id', type: 'uuid', nullable: true })
   userId!: string | null
-
-  @Column({ name: 'parent_id', type: 'uuid', nullable: true })
-  parentId!: string | null
 
   @Column({ type: 'enum', enum: SubscriptionType, enumName: 'subscription_type' })
   type!: SubscriptionType
@@ -65,11 +60,4 @@ export class SubscriptionEntity {
   @ManyToOne(() => UserEntity, user => user.subscriptions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity | null
-
-  @ManyToOne(() => SubscriptionEntity, subscription => subscription.children, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'parent_id' })
-  parent!: SubscriptionEntity | null
-
-  @OneToMany(() => SubscriptionEntity, subscription => subscription.parent)
-  children!: SubscriptionEntity[]
 }

@@ -313,7 +313,6 @@ export class HouseholdService {
   async createSubscription(householdId: string, userId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
     const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
-    const subscriptionParentId = await this.getSubscriptionParentId(householdId, input)
 
     if (subscriptionUserId && subscriptionUserId !== userId) {
       throw new ForbiddenException('Subscription can only be created for current user or household')
@@ -323,7 +322,6 @@ export class HouseholdService {
       householdId,
       name: getSubscriptionName(input),
       userId: subscriptionUserId,
-      parentId: subscriptionParentId,
       type: getSubscriptionType(input),
       startDate: getSubscriptionStartDate(input),
       endDate: getSubscriptionEndDate(input),
@@ -340,11 +338,9 @@ export class HouseholdService {
   async updateSubscription(householdId: string, userId: string, subscriptionId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
     const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
-    const subscriptionParentId = await this.getSubscriptionParentId(householdId, input, subscriptionId)
     const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
       name: getSubscriptionName(input),
       userId: subscriptionUserId,
-      parentId: subscriptionParentId,
       type: getSubscriptionType(input),
       startDate: getSubscriptionStartDate(input),
       endDate: getSubscriptionEndDate(input),
@@ -442,26 +438,6 @@ export class HouseholdService {
     }
 
     return user.id
-  }
-
-  private async getSubscriptionParentId(householdId: string, input: SaveSubscriptionDto, subscriptionId?: string) {
-    const parentId = typeof input?.parentId === 'string' && input.parentId.trim() ? input.parentId.trim() : null
-
-    if (!parentId) {
-      return null
-    }
-
-    if (parentId === subscriptionId) {
-      throw new BadRequestException('Subscription cannot be its own parent')
-    }
-
-    const parentSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(parentId, householdId)
-
-    if (!parentSubscription) {
-      throw new NotFoundException('Parent subscription not found')
-    }
-
-    return parentSubscription.id
   }
 
   private async requireBudgetForHousehold(budgetId: string, householdId: string) {
@@ -584,7 +560,6 @@ function toSubscription(subscription: SubscriptionEntity) {
     householdId: subscription.householdId,
     name: subscription.name,
     userId: subscription.userId,
-    parentId: subscription.parentId,
     user: subscription.user
       ? {
           userId: subscription.user.id,
