@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
+import type { BudgetPeriod } from '~/stores/budgets'
 
 defineOptions({
   name: 'BudgetWorkspace'
@@ -7,10 +7,8 @@ defineOptions({
 
 const props = withDefaults(defineProps<{
   budgetUserId: string
-  showUserNavigation?: boolean
   title?: string
 }>(), {
-  showUserNavigation: true,
   title: 'Budget'
 })
 
@@ -31,104 +29,38 @@ const selectedMonthLabel = computed(() => {
     year: 'numeric'
   })
 })
-const budgetPeriodsPath = computed(() => {
-  const query = new URLSearchParams({
-    month: String(selectedMonth.value),
-    year: String(selectedYear.value)
-  })
-
-  return `/users/${budgetUserId.value}/budget-period/month?${query.toString()}`
-})
 const selectedBudgetId = ref<string | null>(null)
-const { data: dashboardData } = await useApiFetch<{
-  household: {
-    householdId: string
-    householdName: string
-  } | null
-  members: Array<{
-    userId: string
-    name?: string | null
-    email: string
-  }>
-}>('/dashboard')
-const { data, error } = await useApiFetch<{
-  month: BudgetPeriod
-  weeks: BudgetPeriod[]
-}>(() => budgetPeriodsPath.value)
-type BudgetPeriod = {
-  id: string
-  type: 'month' | 'week'
-  startDate: string
-  endDate: string
-  isActive: boolean
-}
-type IncomeType = {
-  id: string
-  householdId: string
-  text: string
-}
-type Income = {
-  id: string
-  incomeTypeId: string
-  incomeTypeText: string
-  amount: number
-  date: string
-}
+const budgetStore = useBudgetsStore()
+const dashboardStore = useDashboardStore()
+const incomeTypesStore = useIncomeTypesStore()
+await dashboardStore.fetchDashboard()
+await budgetStore.fetchMonthBudget(budgetUserId.value, selectedMonth.value, selectedYear.value)
 type AddIncomePayload = {
   amount: number
   incomeTypeId?: string
   newIncomeTypeText?: string
 }
 
-const budgetUserNavigationItems = computed<NavigationMenuItem[]>(() => {
-  return (dashboardData.value?.members || []).map(member => ({
-    label: member.name || member.email,
-    icon: member.userId === budgetUserId.value ? 'i-lucide-circle-dot' : 'i-lucide-circle',
-    to: buildBudgetUserPath(member.userId),
-    active: member.userId === budgetUserId.value
-  }))
-})
-const householdId = computed(() => dashboardData.value?.household?.householdId || '')
+const householdId = computed(() => dashboardStore.householdId)
 const isIncomeModalOpen = ref(false)
 const incomeError = ref('')
 const isCreatingIncomeType = ref(false)
 const isLoadingIncomeTypes = ref(false)
 const incomeTypesLoadError = ref('')
-const incomeTypesData = ref<IncomeType[]>([])
 const isSavingIncome = ref(false)
 const periodLoadError = ref('')
 const selectedBudgetRequestKey = ref<string | null>(null)
 const selectedBudgetRequestPending = ref(false)
+const error = computed(() => budgetStore.getMonthBudgetError(budgetUserId.value, selectedMonth.value, selectedYear.value))
 const budgetPeriods = computed(() => {
-  if (!data.value) {
-    return []
-  }
-
-  return [
-    data.value.month,
-    ...data.value.weeks
-  ]
+  return budgetStore.getBudgetPeriods(budgetUserId.value, selectedMonth.value, selectedYear.value)
 })
 const selectedBudget = computed(() => {
   return budgetPeriods.value.find(budget => budget.id === selectedBudgetId.value) || budgetPeriods.value[0] || null
 })
-const incomeTypes = computed(() => incomeTypesData.value)
-const monthlyBudget = computed(() => data.value?.month || null)
-const incomePath = computed(() => {
-  const budget = selectedBudget.value
-
-  if (!budget) {
-    return `/user/${budgetUserId.value}/budget/_/income`
-  }
-
-  return `/user/${budgetUserId.value}/budget/${budget.id}/income`
-})
-const { data: incomeData, refresh: refreshIncomes } = await useApiFetch<{
-  incomes: Income[]
-}>(() => incomePath.value, {
-  immediate: false
-})
-const incomeEntries = computed(() => incomeData.value?.incomes || [])
+const incomeTypes = computed(() => incomeTypesStore.getIncomeTypes(householdId.value))
+const monthlyBudget = computed(() => budgetStore.getMonthBudget(budgetUserId.value, selectedMonth.value, selectedYear.value))
+const incomeEntries = computed(() => selectedBudget.value ? budgetStore.getIncomeEntries(selectedBudget.value.id) : [])
 const monthlyIncomeTotal = computed(() => {
   return incomeEntries.value.reduce((total, income) => total + income.amount, 0)
 })
@@ -187,15 +119,15 @@ watch(budgetPeriods, (periods) => {
   }
 }, { immediate: true })
 
-watch(() => selectedBudget.value?.id, async (budgetId) => {
-  if (!budgetId) {
-    incomeData.value = {
-      incomes: []
-    }
-    return
-  }
+watch([budgetUserId, selectedMonth, selectedYear], async ([userId, month, year]) => {
+  selectedBudgetId.value = null
+  await budgetStore.fetchMonthBudget(userId, month, year)
+})
 
-  await refreshIncomes()
+watch(() => selectedBudget.value?.id, async (budgetId) => {
+  if (budgetId) {
+    await budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId)
+  }
 }, { immediate: true })
 
 if (import.meta.client) {
@@ -305,30 +237,6 @@ function parseQueryNumber(value: unknown) {
   return Number.isInteger(number) ? number : null
 }
 
-function buildBudgetUserPath(userId: string) {
-  const query = new URLSearchParams()
-
-  for (const [key, value] of Object.entries(route.query)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (typeof item === 'string') {
-          query.append(key, item)
-        }
-      }
-      continue
-    }
-
-    if (typeof value === 'string') {
-      query.set(key, value)
-    }
-  }
-
-  query.set('month', String(selectedMonth.value))
-  query.set('year', String(selectedYear.value))
-
-  return `/users/${userId}/budget?${query.toString()}`
-}
-
 async function openIncomeModal() {
   incomeError.value = ''
   incomeTypesLoadError.value = ''
@@ -370,25 +278,11 @@ async function saveIncome(payload: AddIncomePayload) {
   isSavingIncome.value = true
 
   try {
-    const response = await $fetch<{
-      income: Income
-    }>(`/user/${budgetUserId.value}/budget/${selectedBudget.value.id}/income`, {
-      baseURL: '/api',
-      method: 'POST',
-      credentials: 'include',
-      body: {
-        incomeTypeId: incomeType.id,
-        amount: payload.amount,
-        date: incomeDate
-      }
+    await budgetStore.createIncome(budgetUserId.value, selectedBudget.value.id, {
+      incomeTypeId: incomeType.id,
+      amount: payload.amount,
+      date: incomeDate
     })
-
-    incomeData.value = {
-      incomes: [
-        ...incomeEntries.value,
-        response.income
-      ]
-    }
 
     closeIncomeModal()
   } catch {
@@ -409,20 +303,7 @@ async function createIncomeType(text: string) {
   isCreatingIncomeType.value = true
 
   try {
-    const response = await $fetch<{
-      incomeType: IncomeType
-    }>(`/households/${householdId.value}/income-types`, {
-      baseURL: '/api',
-      method: 'POST',
-      credentials: 'include',
-      body: {
-        text: trimmedText
-      }
-    })
-
-    incomeTypesData.value = [...incomeTypesData.value, response.incomeType].sort((left, right) => left.text.localeCompare(right.text))
-
-    return response.incomeType
+    return await incomeTypesStore.createIncomeType(householdId.value, trimmedText)
   } catch {
     incomeError.value = 'Income type could not be created.'
     return null
@@ -433,21 +314,13 @@ async function createIncomeType(text: string) {
 
 async function loadIncomeTypes() {
   if (!householdId.value) {
-    incomeTypesData.value = []
     return
   }
 
   isLoadingIncomeTypes.value = true
 
   try {
-    const response = await $fetch<{
-      incomeTypes: IncomeType[]
-    }>(`/households/${householdId.value}/income-types`, {
-      baseURL: '/api',
-      credentials: 'include'
-    })
-
-    incomeTypesData.value = response.incomeTypes
+    await incomeTypesStore.fetchIncomeTypes(householdId.value)
   } catch {
     incomeTypesLoadError.value = 'Income types could not be loaded.'
   } finally {
@@ -461,35 +334,14 @@ async function selectBudgetPeriod(period: BudgetPeriod) {
   selectedBudgetRequestKey.value = getBudgetKey(period)
 
   try {
-    const query = new URLSearchParams({
-      month: String(selectedMonth.value),
-      year: String(selectedYear.value)
-    })
-
     if (period.type === 'month') {
-      const response = await $fetch<{
-        month: BudgetPeriod
-        weeks: BudgetPeriod[]
-      }>(`/users/${budgetUserId.value}/budget-period/month?${query.toString()}`, {
-        baseURL: '/api',
-        credentials: 'include'
-      })
-
-      data.value = response
-
-      selectedBudgetId.value = response.month.id
+      await budgetStore.fetchMonthBudget(budgetUserId.value, selectedMonth.value, selectedYear.value, { force: true })
+      selectedBudgetId.value = monthlyBudget.value?.id || null
       return
     }
 
-    query.set('startDate', period.startDate)
-    const response = await $fetch<{
-      budget: BudgetPeriod
-    }>(`/users/${budgetUserId.value}/budget-period/week?${query.toString()}`, {
-      baseURL: '/api',
-      credentials: 'include'
-    })
-
-    selectedBudgetId.value = response.budget.id
+    const budget = await budgetStore.fetchWeekBudget(budgetUserId.value, selectedMonth.value, selectedYear.value, period.startDate)
+    selectedBudgetId.value = budget.id
   } catch {
     periodLoadError.value = 'Budget period could not be loaded.'
   } finally {
@@ -506,17 +358,6 @@ function getBudgetKey(period: Pick<BudgetPeriod, 'type' | 'startDate'>) {
 <template>
   <div>
     <UContainer class="py-6">
-      <div
-        v-if="showUserNavigation && budgetUserNavigationItems.length"
-        class="mb-5 overflow-x-auto border-b border-default pb-3"
-      >
-        <UNavigationMenu
-          :items="budgetUserNavigationItems"
-          orientation="horizontal"
-          :ui="{ link: 'whitespace-nowrap' }"
-        />
-      </div>
-
       <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
           <h1 class="truncate text-2xl font-semibold tracking-normal text-highlighted">

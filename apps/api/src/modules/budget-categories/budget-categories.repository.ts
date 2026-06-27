@@ -84,6 +84,39 @@ export class BudgetCategoriesRepository {
     return this.budgetCategoriesRepository.findOneByOrFail({ id: category.id })
   }
 
+  async delete(householdId: string, categoryId: string) {
+    const category = await this.budgetCategoriesRepository.findOne({
+      where: {
+        id: categoryId,
+        householdId
+      }
+    })
+
+    if (!category) {
+      return false
+    }
+
+    await this.budgetCategoriesRepository.manager.transaction(async (manager) => {
+      await manager.delete(BudgetCategoryEntity, { id: category.id })
+      await manager
+        .createQueryBuilder()
+        .update(BudgetCategoryEntity)
+        .set({ order: () => '-"order"' })
+        .where('"household_id" = :householdId', { householdId })
+        .andWhere('"order" > :deletedOrder', { deletedOrder: category.order })
+        .execute()
+      await manager
+        .createQueryBuilder()
+        .update(BudgetCategoryEntity)
+        .set({ order: () => 'ABS("order") - 1' })
+        .where('"household_id" = :householdId', { householdId })
+        .andWhere('"order" < 0')
+        .execute()
+    })
+
+    return true
+  }
+
   private async getNextOrder(householdId: string) {
     const result = await this.budgetCategoriesRepository
       .createQueryBuilder('category')

@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { BudgetCategoriesRepository } from '../budget-categories/budget-categories.repository'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
@@ -12,6 +12,10 @@ import { IncomeRepository } from '../income/income.repository'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
 import type { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { IncomeTypesRepository } from '../income-types/income-types.repository'
+import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
+import type { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
+import { SubscriptionType } from '../subscriptions/entities/subscription-type'
+import { SubscriptionsRepository } from '../subscriptions/subscriptions.repository'
 import { UsersRepository } from '../users/users.repository'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
 import { HouseholdsRepository } from './households.repository'
@@ -31,6 +35,7 @@ export class HouseholdService {
     @Inject(HouseholdsRepository) private readonly householdsRepository: HouseholdsRepository,
     @Inject(IncomeRepository) private readonly incomeRepository: IncomeRepository,
     @Inject(IncomeTypesRepository) private readonly incomeTypesRepository: IncomeTypesRepository,
+    @Inject(SubscriptionsRepository) private readonly subscriptionsRepository: SubscriptionsRepository,
     @Inject(UsersRepository) private readonly usersRepository: UsersRepository
   ) {}
 
@@ -237,6 +242,19 @@ export class HouseholdService {
     }
   }
 
+  async deleteBudgetCategory(householdId: string, userId: string, categoryId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const deleted = await this.budgetCategoriesRepository.delete(householdId, categoryId)
+
+    if (!deleted) {
+      throw new NotFoundException('Budget category not found')
+    }
+
+    return {
+      deleted: true
+    }
+  }
+
   async listIncomeTypes(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const incomeTypes = await this.incomeTypesRepository.listByHouseholdId(householdId)
@@ -276,6 +294,78 @@ export class HouseholdService {
 
     if (!deleted) {
       throw new NotFoundException('Income type not found')
+    }
+
+    return {
+      deleted: true
+    }
+  }
+
+  async listSubscriptions(householdId: string, userId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const subscriptions = await this.subscriptionsRepository.listByHouseholdId(householdId)
+
+    return {
+      subscriptions: subscriptions.map(toSubscription)
+    }
+  }
+
+  async createSubscription(householdId: string, userId: string, input: SaveSubscriptionDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
+    const subscriptionParentId = await this.getSubscriptionParentId(householdId, input)
+
+    if (subscriptionUserId && subscriptionUserId !== userId) {
+      throw new ForbiddenException('Subscription can only be created for current user or household')
+    }
+
+    const subscription = await this.subscriptionsRepository.create({
+      householdId,
+      name: getSubscriptionName(input),
+      userId: subscriptionUserId,
+      parentId: subscriptionParentId,
+      type: getSubscriptionType(input),
+      startDate: getSubscriptionStartDate(input),
+      endDate: getSubscriptionEndDate(input),
+      amount: getSubscriptionAmount(input)
+    })
+
+    const savedSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscription.id, householdId)
+
+    return {
+      subscription: toSubscription(savedSubscription || subscription)
+    }
+  }
+
+  async updateSubscription(householdId: string, userId: string, subscriptionId: string, input: SaveSubscriptionDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
+    const subscriptionParentId = await this.getSubscriptionParentId(householdId, input, subscriptionId)
+    const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
+      name: getSubscriptionName(input),
+      userId: subscriptionUserId,
+      parentId: subscriptionParentId,
+      type: getSubscriptionType(input),
+      startDate: getSubscriptionStartDate(input),
+      endDate: getSubscriptionEndDate(input),
+      amount: getSubscriptionAmount(input)
+    })
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    return {
+      subscription: toSubscription(subscription)
+    }
+  }
+
+  async deleteSubscription(householdId: string, userId: string, subscriptionId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const deleted = await this.subscriptionsRepository.delete(householdId, subscriptionId)
+
+    if (!deleted) {
+      throw new NotFoundException('Subscription not found')
     }
 
     return {
@@ -332,6 +422,48 @@ export class HouseholdService {
     return budgetUser.householdId
   }
 
+  private async getSubscriptionUserId(householdId: string, input: SaveSubscriptionDto) {
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+
+    if (members.length === 1) {
+      return members[0]!.userId
+    }
+
+    const userId = typeof input?.userId === 'string' && input.userId.trim() ? input.userId.trim() : null
+
+    if (!userId) {
+      return null
+    }
+
+    const user = await this.usersRepository.findByHouseholdIdAndUserId(householdId, userId)
+
+    if (!user) {
+      throw new NotFoundException('Subscription user not found')
+    }
+
+    return user.id
+  }
+
+  private async getSubscriptionParentId(householdId: string, input: SaveSubscriptionDto, subscriptionId?: string) {
+    const parentId = typeof input?.parentId === 'string' && input.parentId.trim() ? input.parentId.trim() : null
+
+    if (!parentId) {
+      return null
+    }
+
+    if (parentId === subscriptionId) {
+      throw new BadRequestException('Subscription cannot be its own parent')
+    }
+
+    const parentSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(parentId, householdId)
+
+    if (!parentSubscription) {
+      throw new NotFoundException('Parent subscription not found')
+    }
+
+    return parentSubscription.id
+  }
+
   private async requireBudgetForHousehold(budgetId: string, householdId: string) {
     const budget = await this.budgetsRepository.findByIdAndHouseholdId(budgetId, householdId)
 
@@ -381,6 +513,92 @@ function toIncomeType(incomeType: IncomeTypeEntity) {
     text: incomeType.text,
     createdAt: incomeType.createdAt,
     updatedAt: incomeType.updatedAt
+  }
+}
+
+function getSubscriptionName(input: SaveSubscriptionDto) {
+  const name = typeof input?.name === 'string' ? input.name.trim() : ''
+
+  if (!name) {
+    throw new BadRequestException('Subscription name is required')
+  }
+
+  return name
+}
+
+function getSubscriptionType(input: SaveSubscriptionDto) {
+  if (input?.type === SubscriptionType.Monthly || input?.type === SubscriptionType.Yearly) {
+    return input.type
+  }
+
+  throw new BadRequestException('Subscription type must be monthly or yearly')
+}
+
+function getSubscriptionStartDate(input: SaveSubscriptionDto) {
+  const startDate = typeof input?.startDate === 'string' ? input.startDate : ''
+
+  if (!isDateString(startDate)) {
+    throw new BadRequestException('Subscription start date must be in YYYY-MM-DD format')
+  }
+
+  return startDate
+}
+
+function getSubscriptionEndDate(input: SaveSubscriptionDto) {
+  const endDate = typeof input?.endDate === 'string' && input.endDate ? input.endDate : null
+
+  if (!endDate) {
+    return null
+  }
+
+  if (!isDateString(endDate)) {
+    throw new BadRequestException('Subscription end date must be in YYYY-MM-DD format')
+  }
+
+  const startDate = getSubscriptionStartDate(input)
+
+  if (endDate < startDate) {
+    throw new BadRequestException('Subscription end date must be on or after the start date')
+  }
+
+  return endDate
+}
+
+function getSubscriptionAmount(input: SaveSubscriptionDto) {
+  const amount = Number(input?.amount)
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new BadRequestException('Subscription amount must be greater than zero')
+  }
+
+  return amount
+}
+
+function isDateString(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function toSubscription(subscription: SubscriptionEntity) {
+  return {
+    id: subscription.id,
+    householdId: subscription.householdId,
+    name: subscription.name,
+    userId: subscription.userId,
+    parentId: subscription.parentId,
+    user: subscription.user
+      ? {
+          userId: subscription.user.id,
+          name: subscription.user.name,
+          email: subscription.user.email,
+          avatarUrl: subscription.user.avatarUrl
+        }
+      : null,
+    type: subscription.type,
+    startDate: subscription.startDate,
+    endDate: subscription.endDate,
+    amount: subscription.amount,
+    createdAt: subscription.createdAt,
+    updatedAt: subscription.updatedAt
   }
 }
 

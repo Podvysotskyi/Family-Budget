@@ -1,13 +1,8 @@
 export default defineNuxtRouteMiddleware(async () => {
-  const headers = import.meta.server ? useRequestHeaders(['cookie']) : undefined
+  const authStore = useAuthStore()
+  const isAuthenticated = await authStore.checkSession()
 
-  try {
-    await $fetch('/auth/me', {
-      baseURL: '/api',
-      credentials: 'include',
-      headers
-    })
-  } catch {
+  if (!isAuthenticated) {
     return navigateTo('/login')
   }
 })

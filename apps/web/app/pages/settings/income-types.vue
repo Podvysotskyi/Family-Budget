@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IncomeType } from '~/stores/income-types'
+
 defineOptions({
   name: 'IncomeTypesSettingsPage'
 })
@@ -8,34 +10,21 @@ definePageMeta({
   layout: 'app'
 })
 
-type IncomeType = {
-  id: string
-  householdId: string
-  text: string
-  createdAt: string
-  updatedAt: string
-}
-
 const newIncomeTypeText = ref('')
 const editingIncomeTypeId = ref<string | null>(null)
 const editingIncomeTypeText = ref('')
 const incomeTypeError = ref<string | null>(null)
 const isCreatingIncomeType = ref(false)
 const updatingIncomeTypeId = ref<string | null>(null)
-const confirmingDeleteIncomeTypeId = ref<string | null>(null)
+const incomeTypePendingDelete = ref<IncomeType | null>(null)
 const deletingIncomeTypeId = ref<string | null>(null)
-const { data: dashboardData } = await useApiFetch<{
-  household: {
-    householdId: string
-  } | null
-}>('/dashboard')
-const householdId = computed(() => dashboardData.value?.household?.householdId || '')
-const data = ref<{
-  incomeTypes: IncomeType[]
-} | null>(null)
-const pending = ref(false)
-const error = ref<unknown>(null)
-const incomeTypes = computed(() => data.value?.incomeTypes || [])
+const dashboardStore = useDashboardStore()
+const incomeTypesStore = useIncomeTypesStore()
+await dashboardStore.fetchDashboard()
+const householdId = computed(() => dashboardStore.householdId)
+const pending = computed(() => incomeTypesStore.isLoading(householdId.value))
+const error = computed(() => incomeTypesStore.getError(householdId.value))
+const incomeTypes = computed(() => incomeTypesStore.getIncomeTypes(householdId.value))
 const trimmedNewIncomeTypeText = computed(() => newIncomeTypeText.value.trim())
 const trimmedEditingIncomeTypeText = computed(() => editingIncomeTypeText.value.trim())
 
@@ -50,27 +39,7 @@ watch(householdId, async (id) => {
 })
 
 async function refresh() {
-  error.value = null
-
-  if (!householdId.value) {
-    data.value = null
-    return
-  }
-
-  pending.value = true
-
-  try {
-    data.value = await $fetch<{
-      incomeTypes: IncomeType[]
-    }>(`/households/${householdId.value}/income-types`, {
-      baseURL: '/api',
-      credentials: 'include'
-    })
-  } catch (fetchError) {
-    error.value = fetchError
-  } finally {
-    pending.value = false
-  }
+  await incomeTypesStore.fetchIncomeTypes(householdId.value)
 }
 
 async function createIncomeType() {
@@ -89,16 +58,8 @@ async function createIncomeType() {
   isCreatingIncomeType.value = true
 
   try {
-    await $fetch(`/households/${householdId.value}/income-types`, {
-      baseURL: '/api',
-      method: 'POST',
-      credentials: 'include',
-      body: {
-        text: trimmedNewIncomeTypeText.value
-      }
-    })
+    await incomeTypesStore.createIncomeType(householdId.value, trimmedNewIncomeTypeText.value)
     newIncomeTypeText.value = ''
-    await refresh()
   } catch {
     incomeTypeError.value = 'Income type could not be created.'
   } finally {
@@ -119,11 +80,11 @@ function cancelEditingIncomeType() {
 
 function startDeletingIncomeType(incomeType: IncomeType) {
   incomeTypeError.value = null
-  confirmingDeleteIncomeTypeId.value = incomeType.id
+  incomeTypePendingDelete.value = incomeType
 }
 
 function cancelDeletingIncomeType() {
-  confirmingDeleteIncomeTypeId.value = null
+  incomeTypePendingDelete.value = null
 }
 
 async function updateIncomeType(incomeType: IncomeType) {
@@ -147,16 +108,8 @@ async function updateIncomeType(incomeType: IncomeType) {
   updatingIncomeTypeId.value = incomeType.id
 
   try {
-    await $fetch(`/households/${householdId.value}/income-types/${incomeType.id}`, {
-      baseURL: '/api',
-      method: 'PATCH',
-      credentials: 'include',
-      body: {
-        text: trimmedEditingIncomeTypeText.value
-      }
-    })
+    await incomeTypesStore.updateIncomeType(householdId.value, incomeType.id, trimmedEditingIncomeTypeText.value)
     cancelEditingIncomeType()
-    await refresh()
   } catch {
     incomeTypeError.value = 'Income type could not be saved.'
   } finally {
@@ -164,24 +117,23 @@ async function updateIncomeType(incomeType: IncomeType) {
   }
 }
 
-async function deleteIncomeType(incomeType: IncomeType) {
+async function deleteIncomeType() {
   incomeTypeError.value = null
+
+  if (!incomeTypePendingDelete.value) {
+    return
+  }
 
   if (!householdId.value) {
     incomeTypeError.value = 'Household is required.'
     return
   }
 
-  deletingIncomeTypeId.value = incomeType.id
+  deletingIncomeTypeId.value = incomeTypePendingDelete.value.id
 
   try {
-    await $fetch(`/households/${householdId.value}/income-types/${incomeType.id}`, {
-      baseURL: '/api',
-      method: 'DELETE',
-      credentials: 'include'
-    })
+    await incomeTypesStore.deleteIncomeType(householdId.value, incomeTypePendingDelete.value.id)
     cancelDeletingIncomeType()
-    await refresh()
   } catch {
     incomeTypeError.value = 'Income type could not be deleted.'
   } finally {
@@ -306,43 +258,22 @@ async function deleteIncomeType(incomeType: IncomeType) {
               {{ incomeType.text }}
             </p>
             <div class="flex items-center gap-1">
-              <template v-if="confirmingDeleteIncomeTypeId === incomeType.id">
-                <UButton
-                  icon="i-lucide-check"
-                  color="error"
-                  variant="ghost"
-                  aria-label="Confirm delete income type"
-                  :loading="deletingIncomeTypeId === incomeType.id"
-                  @click="deleteIncomeType(incomeType)"
-                />
-                <UButton
-                  icon="i-lucide-x"
-                  color="neutral"
-                  variant="ghost"
-                  aria-label="Cancel delete income type"
-                  :disabled="deletingIncomeTypeId === incomeType.id"
-                  @click="cancelDeletingIncomeType"
-                />
-              </template>
-
-              <template v-else>
-                <UButton
-                  icon="i-lucide-pencil"
-                  color="neutral"
-                  variant="ghost"
-                  aria-label="Edit income type"
-                  :disabled="deletingIncomeTypeId === incomeType.id"
-                  @click="startEditingIncomeType(incomeType)"
-                />
-                <UButton
-                  icon="i-lucide-trash-2"
-                  color="error"
-                  variant="ghost"
-                  aria-label="Delete income type"
-                  :disabled="deletingIncomeTypeId === incomeType.id"
-                  @click="startDeletingIncomeType(incomeType)"
-                />
-              </template>
+              <UButton
+                icon="i-lucide-pencil"
+                color="neutral"
+                variant="ghost"
+                aria-label="Edit income type"
+                :disabled="deletingIncomeTypeId === incomeType.id"
+                @click="startEditingIncomeType(incomeType)"
+              />
+              <UButton
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                aria-label="Delete income type"
+                :disabled="deletingIncomeTypeId === incomeType.id"
+                @click="startDeletingIncomeType(incomeType)"
+              />
             </div>
           </div>
         </div>
@@ -355,5 +286,17 @@ async function deleteIncomeType(incomeType: IncomeType) {
         No income types found.
       </div>
     </section>
+
+    <ConfirmationModal
+      :open="Boolean(incomeTypePendingDelete)"
+      title="Delete income type"
+      :description="incomeTypePendingDelete ? `Delete ${incomeTypePendingDelete.text}?` : ''"
+      confirm-label="Delete"
+      :is-confirming="Boolean(deletingIncomeTypeId)"
+      @update:open="value => !value && cancelDeletingIncomeType()"
+      @confirm="deleteIncomeType"
+    >
+      This income type will be removed from the household.
+    </ConfirmationModal>
   </UContainer>
 </template>

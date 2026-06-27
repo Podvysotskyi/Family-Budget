@@ -4,6 +4,7 @@ import { BudgetCategoriesModule } from '../budget-categories/budget-categories.m
 import { BudgetsModule } from '../budgets/budgets.module'
 import { IncomeModule } from '../income/income.module'
 import { IncomeTypesModule } from '../income-types/income-types.module'
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module'
 import { UsersModule } from '../users/users.module'
 import { HouseholdEntity } from './entities/household.entity'
 import { HouseholdsController } from './households.controller'
@@ -17,6 +18,7 @@ import { UserBudgetsController } from './user-budgets.controller'
     BudgetsModule,
     IncomeModule,
     IncomeTypesModule,
+    SubscriptionsModule,
     UsersModule,
     TypeOrmModule.forFeature([
       HouseholdEntity

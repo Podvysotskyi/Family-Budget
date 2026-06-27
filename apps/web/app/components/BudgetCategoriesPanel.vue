@@ -7,18 +7,11 @@ const props = defineProps<{
   householdId: string
 }>()
 
-type BudgetCategory = {
-  id: string
-  householdId: string
-  name: string
-  order: number
-}
+const budgetCategoriesStore = useBudgetCategoriesStore()
+await budgetCategoriesStore.fetchCategories(props.householdId)
 
-const { data, error } = await useApiFetch<{
-  categories: BudgetCategory[]
-}>(() => `/households/${props.householdId}/budget-categories`)
-
-const budgetCategories = computed(() => data.value?.categories || [])
+const error = computed(() => budgetCategoriesStore.getError(props.householdId))
+const budgetCategories = computed(() => budgetCategoriesStore.getCategories(props.householdId))
 </script>
 
 <template>

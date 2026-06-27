@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, Up
 import { BudgetCategoryEntity } from '../../budget-categories/entities/budget-category.entity'
 import { BudgetEntity } from '../../budgets/entities/budget.entity'
 import { IncomeTypeEntity } from '../../income-types/entities/income-type.entity'
+import { SubscriptionEntity } from '../../subscriptions/entities/subscription.entity'
 import { UserEntity } from '../../users/entities/user.entity'
 
 @Entity({ name: 'households' })
@@ -29,4 +30,7 @@ export class HouseholdEntity {
 
   @OneToMany(() => IncomeTypeEntity, incomeType => incomeType.household)
   incomeTypes!: IncomeTypeEntity[]
+
+  @OneToMany(() => SubscriptionEntity, subscription => subscription.household)
+  subscriptions!: SubscriptionEntity[]
 }

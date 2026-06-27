@@ -4,6 +4,7 @@ import { requireRequestUser } from '../auth/request-user'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
+import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
 import { HouseholdService } from './households.service'
 
@@ -103,6 +104,25 @@ export class HouseholdsController {
     return this.householdService.reorderBudgetCategory(householdId, user.id, categoryId, parseBudgetCategoryDirection(direction))
   }
 
+  @Delete(':id/budget-categories/:categoryId')
+  deleteBudgetCategory(
+    @Param('id') householdId: string,
+    @Param('categoryId') categoryId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!categoryId) {
+      throw new BadRequestException('Budget category id is required')
+    }
+
+    return this.householdService.deleteBudgetCategory(householdId, user.id, categoryId)
+  }
+
   @Get(':id/income-types')
   incomeTypes(@Param('id') householdId: string, @Req() request: AuthenticatedRequest) {
     const user = requireRequestUser(request)
@@ -166,6 +186,71 @@ export class HouseholdsController {
     }
 
     return this.householdService.deleteIncomeType(householdId, user.id, incomeTypeId)
+  }
+
+  @Get(':id/subscriptions')
+  subscriptions(@Param('id') householdId: string, @Req() request: AuthenticatedRequest) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.listSubscriptions(householdId, user.id)
+  }
+
+  @Post(':id/subscriptions')
+  createSubscription(
+    @Param('id') householdId: string,
+    @Body() input: SaveSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.createSubscription(householdId, user.id, input)
+  }
+
+  @Patch(':id/subscriptions/:subscriptionId')
+  updateSubscription(
+    @Param('id') householdId: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() input: SaveSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!subscriptionId) {
+      throw new BadRequestException('Subscription id is required')
+    }
+
+    return this.householdService.updateSubscription(householdId, user.id, subscriptionId, input)
+  }
+
+  @Delete(':id/subscriptions/:subscriptionId')
+  deleteSubscription(
+    @Param('id') householdId: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!subscriptionId) {
+      throw new BadRequestException('Subscription id is required')
+    }
+
+    return this.householdService.deleteSubscription(householdId, user.id, subscriptionId)
   }
 }
 

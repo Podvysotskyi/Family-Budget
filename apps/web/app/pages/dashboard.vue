@@ -7,14 +7,11 @@ definePageMeta({
   middleware: 'auth'
 })
 
-const { data, error } = await useApiFetch<{
-  household: {
-    householdId: string
-  } | null
-}>('/dashboard')
+const dashboardStore = useDashboardStore()
+await dashboardStore.fetchDashboard()
 
-if (!error.value && data.value?.household) {
-  await navigateTo('/household/budget')
+if (!dashboardStore.error && dashboardStore.household) {
+  await navigateTo(dashboardStore.members.length > 1 ? '/budget/household' : '/budget')
 }
 </script>
 

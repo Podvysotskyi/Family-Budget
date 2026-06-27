@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { BudgetCategory } from '~/stores/budget-categories'
+
 defineOptions({
   name: 'BudgetCategoriesSettingsPage'
 })
@@ -8,34 +10,22 @@ definePageMeta({
   layout: 'app'
 })
 
-type BudgetCategory = {
-  id: string
-  householdId: string
-  name: string
-  order: number
-  createdAt: string
-  updatedAt: string
-}
-
 const newBudgetCategoryName = ref('')
 const editingBudgetCategoryId = ref<string | null>(null)
 const editingBudgetCategoryName = ref('')
 const budgetCategoryError = ref<string | null>(null)
 const isCreatingBudgetCategory = ref(false)
+const budgetCategoryPendingDelete = ref<BudgetCategory | null>(null)
+const deletingBudgetCategoryId = ref<string | null>(null)
 const reorderingBudgetCategoryId = ref<string | null>(null)
 const updatingBudgetCategoryId = ref<string | null>(null)
-const { data: dashboardData } = await useApiFetch<{
-  household: {
-    householdId: string
-  } | null
-}>('/dashboard')
-const householdId = computed(() => dashboardData.value?.household?.householdId || '')
-const data = ref<{
-  categories: BudgetCategory[]
-} | null>(null)
-const pending = ref(false)
-const error = ref<unknown>(null)
-const budgetCategories = computed(() => data.value?.categories || [])
+const dashboardStore = useDashboardStore()
+const budgetCategoriesStore = useBudgetCategoriesStore()
+await dashboardStore.fetchDashboard()
+const householdId = computed(() => dashboardStore.householdId)
+const pending = computed(() => budgetCategoriesStore.isLoading(householdId.value))
+const error = computed(() => budgetCategoriesStore.getError(householdId.value))
+const budgetCategories = computed(() => budgetCategoriesStore.getCategories(householdId.value))
 const trimmedNewBudgetCategoryName = computed(() => newBudgetCategoryName.value.trim())
 const trimmedEditingBudgetCategoryName = computed(() => editingBudgetCategoryName.value.trim())
 
@@ -50,27 +40,7 @@ watch(householdId, async (id) => {
 })
 
 async function refresh() {
-  error.value = null
-
-  if (!householdId.value) {
-    data.value = null
-    return
-  }
-
-  pending.value = true
-
-  try {
-    data.value = await $fetch<{
-      categories: BudgetCategory[]
-    }>(`/households/${householdId.value}/budget-categories`, {
-      baseURL: '/api',
-      credentials: 'include'
-    })
-  } catch (fetchError) {
-    error.value = fetchError
-  } finally {
-    pending.value = false
-  }
+  await budgetCategoriesStore.fetchCategories(householdId.value)
 }
 
 async function createBudgetCategory() {
@@ -89,16 +59,8 @@ async function createBudgetCategory() {
   isCreatingBudgetCategory.value = true
 
   try {
-    await $fetch(`/households/${householdId.value}/budget-categories`, {
-      baseURL: '/api',
-      method: 'POST',
-      credentials: 'include',
-      body: {
-        name: trimmedNewBudgetCategoryName.value
-      }
-    })
+    await budgetCategoriesStore.createCategory(householdId.value, trimmedNewBudgetCategoryName.value)
     newBudgetCategoryName.value = ''
-    await refresh()
   } catch {
     budgetCategoryError.value = 'Budget category could not be created.'
   } finally {
@@ -115,6 +77,15 @@ function startEditingBudgetCategory(category: BudgetCategory) {
 function cancelEditingBudgetCategory() {
   editingBudgetCategoryId.value = null
   editingBudgetCategoryName.value = ''
+}
+
+function startDeletingBudgetCategory(category: BudgetCategory) {
+  budgetCategoryError.value = null
+  budgetCategoryPendingDelete.value = category
+}
+
+function cancelDeletingBudgetCategory() {
+  budgetCategoryPendingDelete.value = null
 }
 
 async function updateBudgetCategory(category: BudgetCategory) {
@@ -138,20 +109,36 @@ async function updateBudgetCategory(category: BudgetCategory) {
   updatingBudgetCategoryId.value = category.id
 
   try {
-    await $fetch(`/households/${householdId.value}/budget-categories/${category.id}`, {
-      baseURL: '/api',
-      method: 'PATCH',
-      credentials: 'include',
-      body: {
-        name: trimmedEditingBudgetCategoryName.value
-      }
-    })
+    await budgetCategoriesStore.updateCategory(householdId.value, category.id, trimmedEditingBudgetCategoryName.value)
     cancelEditingBudgetCategory()
-    await refresh()
   } catch {
     budgetCategoryError.value = 'Budget category could not be saved.'
   } finally {
     updatingBudgetCategoryId.value = null
+  }
+}
+
+async function deleteBudgetCategory() {
+  budgetCategoryError.value = null
+
+  if (!budgetCategoryPendingDelete.value) {
+    return
+  }
+
+  if (!householdId.value) {
+    budgetCategoryError.value = 'Household is required.'
+    return
+  }
+
+  deletingBudgetCategoryId.value = budgetCategoryPendingDelete.value.id
+
+  try {
+    await budgetCategoriesStore.deleteCategory(householdId.value, budgetCategoryPendingDelete.value.id)
+    cancelDeletingBudgetCategory()
+  } catch {
+    budgetCategoryError.value = 'Budget category could not be deleted.'
+  } finally {
+    deletingBudgetCategoryId.value = null
   }
 }
 
@@ -166,12 +153,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
   reorderingBudgetCategoryId.value = category.id
 
   try {
-    await $fetch(`/households/${householdId.value}/budget-categories/${category.id}/order/${direction}`, {
-      baseURL: '/api',
-      method: 'PATCH',
-      credentials: 'include'
-    })
-    await refresh()
+    await budgetCategoriesStore.reorderCategory(householdId.value, category.id, direction)
   } catch {
     budgetCategoryError.value = 'Budget category order could not be updated.'
   } finally {
@@ -307,7 +289,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 color="neutral"
                 variant="ghost"
                 aria-label="Move budget category up"
-                :disabled="category.order === 1 || reorderingBudgetCategoryId === category.id"
+                :disabled="category.order === 1 || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
                 @click="reorderBudgetCategory(category, 'up')"
               />
               <UButton
@@ -315,7 +297,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 color="neutral"
                 variant="ghost"
                 aria-label="Move budget category down"
-                :disabled="category.order === budgetCategories.length || reorderingBudgetCategoryId === category.id"
+                :disabled="category.order === budgetCategories.length || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
                 @click="reorderBudgetCategory(category, 'down')"
               />
               <UButton
@@ -323,8 +305,16 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 color="neutral"
                 variant="ghost"
                 aria-label="Edit budget category"
-                :disabled="reorderingBudgetCategoryId === category.id"
+                :disabled="reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
                 @click="startEditingBudgetCategory(category)"
+              />
+              <UButton
+                icon="i-lucide-trash-2"
+                color="error"
+                variant="ghost"
+                aria-label="Delete budget category"
+                :disabled="reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
+                @click="startDeletingBudgetCategory(category)"
               />
             </div>
           </div>
@@ -338,5 +328,17 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
         No budget categories found.
       </div>
     </section>
+
+    <ConfirmationModal
+      :open="Boolean(budgetCategoryPendingDelete)"
+      title="Delete budget category"
+      :description="budgetCategoryPendingDelete ? `Delete ${budgetCategoryPendingDelete.name}?` : ''"
+      confirm-label="Delete"
+      :is-confirming="Boolean(deletingBudgetCategoryId)"
+      @update:open="value => !value && cancelDeletingBudgetCategory()"
+      @confirm="deleteBudgetCategory"
+    >
+      This category will be removed from the household budget setup.
+    </ConfirmationModal>
   </UContainer>
 </template>

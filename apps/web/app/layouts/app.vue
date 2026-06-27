@@ -5,51 +5,29 @@ defineOptions({
   name: 'AppLayout'
 })
 
-type DashboardShell = {
-  user: {
-    id: string
-    email: string
-    name?: string | null
-  }
-  household: {
-    householdId: string
-    householdName: string
-  } | null
-  members: Array<{
-    userId: string
-    name?: string | null
-    email: string
-  }>
-}
-
 const route = useRoute()
 const signOut = useSignOut()
 const open = ref(true)
-const { data } = await useApiFetch<DashboardShell>('/dashboard')
-const householdSettingsPath = '/settings'
+const dashboardStore = useDashboardStore()
+await dashboardStore.fetchDashboard()
+const householdSettingsPath = '/settings/household'
 const budgetCategoriesSettingsPath = '/settings/budget-categories'
 const incomeTypesSettingsPath = '/settings/income-types'
-const householdBudgetPath = '/household/budget'
-const defaultBudgetUserId = computed(() => {
-  return data.value?.members.find(member => member.userId === data.value?.user.id)?.userId
-    || data.value?.members[0]?.userId
-    || data.value?.user.id
-    || ''
-})
-const userBudgetPath = computed(() => defaultBudgetUserId.value ? `/users/${defaultBudgetUserId.value}/budget` : householdBudgetPath)
+const userBudgetPath = '/budget'
+const subscriptionsPath = '/subscriptions'
 const navigationItems = computed<NavigationMenuItem[]>(() => {
   return [
     {
-      label: 'Budgets',
+      label: 'Budget',
       icon: 'i-lucide-wallet-cards',
-      to: userBudgetPath.value,
-      active: route.path.startsWith('/users/')
+      to: userBudgetPath,
+      active: route.path === '/budget' || /^\/budget\/(?!household(?:\/|$))/.test(route.path)
     },
     {
-      label: 'Household budget',
-      icon: 'i-lucide-house',
-      to: householdBudgetPath,
-      active: route.path === '/dashboard' || route.path === householdBudgetPath
+      label: 'Subscriptions',
+      icon: 'i-lucide-repeat-2',
+      to: subscriptionsPath,
+      active: route.path.startsWith('/subscriptions')
     },
     {
       label: 'Settings',
@@ -80,16 +58,12 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
   ]
 })
 const pageTitle = computed(() => {
-  if (route.path === '/dashboard') {
-    return 'Household budget'
+  if (route.path.startsWith('/budget')) {
+    return 'Budget'
   }
 
-  if (route.path === '/household/budget') {
-    return 'Household budget'
-  }
-
-  if (route.path === '/settings') {
-    return 'Household'
+  if (route.path.startsWith('/subscriptions')) {
+    return 'Subscriptions'
   }
 
   if (route.path === '/settings/budget-categories') {
@@ -100,11 +74,7 @@ const pageTitle = computed(() => {
     return 'Income types'
   }
 
-  if (route.path.startsWith('/users/')) {
-    return 'Budget'
-  }
-
-  return 'Family Budget'
+  return '...'
 })
 </script>
 
@@ -112,7 +82,7 @@ const pageTitle = computed(() => {
   <div class="flex min-h-screen flex-1">
     <USidebar
       v-model:open="open"
-      collapsible="icon"
+      collapsible="offcanvas"
       :ui="{
         container: 'h-full'
       }"
@@ -130,7 +100,7 @@ const pageTitle = computed(() => {
               Family Budget
             </p>
             <p class="truncate text-xs text-muted">
-              {{ data?.household?.householdName || 'Household' }}
+              {{ dashboardStore.householdName || 'Household' }}
             </p>
           </div>
         </div>
@@ -147,6 +117,7 @@ const pageTitle = computed(() => {
       <header class="flex h-(--ui-header-height) shrink-0 items-center justify-between gap-3 border-b border-default px-4">
         <div class="flex min-w-0 items-center gap-3">
           <UButton
+            class="lg:hidden"
             icon="i-lucide-panel-left"
             color="neutral"
             variant="ghost"

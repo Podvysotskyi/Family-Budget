@@ -1,10 +1,8 @@
 export function useSignOut() {
   return async () => {
-    await $fetch('/auth/logout', {
-      baseURL: '/api',
-      method: 'POST',
-      credentials: 'include'
-    }).catch(() => undefined)
+    const authStore = useAuthStore()
+
+    await authStore.signOut()
 
     clearNuxtData()
 

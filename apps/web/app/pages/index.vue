@@ -5,9 +5,10 @@ defineOptions({
 
 definePageMeta({
   middleware: async () => {
-    const { error } = await useApiFetch('/auth/me')
+    const authStore = useAuthStore()
+    const isAuthenticated = await authStore.checkSession()
 
-    return navigateTo(error.value ? '/login' : '/dashboard')
+    return navigateTo(isAuthenticated ? '/dashboard' : '/login')
   }
 })
 </script>
