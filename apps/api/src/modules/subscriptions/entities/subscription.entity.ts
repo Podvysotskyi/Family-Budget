@@ -11,13 +11,10 @@ import {
 } from 'typeorm'
 import { HouseholdEntity } from '../../households/entities/household.entity'
 import { UserEntity } from '../../users/entities/user.entity'
+import { SubscriptionAmountEntity } from './subscription-amount.entity'
+import { SubscriptionDateEntity } from './subscription-date.entity'
 import { SubscriptionTransactionEntity } from './subscription-transaction.entity'
 import { SubscriptionType } from './subscription-type'
-
-const amountTransformer = {
-  to: (value: number) => value,
-  from: (value: string | number) => Number(value)
-}
 
 @Entity({ name: 'subscriptions' })
 @Index('subscriptions_household_id_idx', ['householdId'])
@@ -44,9 +41,6 @@ export class SubscriptionEntity {
   @Column({ name: 'end_date', type: 'date', nullable: true })
   endDate!: string | null
 
-  @Column({ type: 'numeric', precision: 12, scale: 2, transformer: amountTransformer })
-  amount!: number
-
   @Column({ type: 'boolean', default: false })
   autopay!: boolean
 
@@ -66,4 +60,10 @@ export class SubscriptionEntity {
 
   @OneToMany(() => SubscriptionTransactionEntity, subscriptionTransaction => subscriptionTransaction.subscription)
   transactions!: SubscriptionTransactionEntity[]
+
+  @OneToMany(() => SubscriptionAmountEntity, subscriptionAmount => subscriptionAmount.subscription)
+  amounts!: SubscriptionAmountEntity[]
+
+  @OneToMany(() => SubscriptionDateEntity, subscriptionDate => subscriptionDate.subscription)
+  dates!: SubscriptionDateEntity[]
 }

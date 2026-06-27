@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Brackets, MoreThan, type SelectQueryBuilder, type Repository } from 'typeorm'
+import { MoreThan, type EntityManager, type SelectQueryBuilder, type Repository } from 'typeorm'
+import { SubscriptionAmountEntity } from './entities/subscription-amount.entity'
+import { SubscriptionDateEntity } from './entities/subscription-date.entity'
 import { SubscriptionTransactionEntity } from './entities/subscription-transaction.entity'
 import { SubscriptionEntity } from './entities/subscription.entity'
 import { SubscriptionType } from './entities/subscription-type'
@@ -16,6 +18,11 @@ export interface SaveSubscriptionInput {
   autopay: boolean
 }
 
+export interface UpdateSubscriptionInput extends SaveSubscriptionInput {
+  amountEffectiveDate: string
+  ensureDatesThroughDate: string
+}
+
 export interface CreateSubscriptionTransactionInput {
   amount: number
   date: string
@@ -28,15 +35,17 @@ export class SubscriptionsRepository {
   constructor(
     @InjectRepository(SubscriptionEntity)
     private readonly subscriptionsRepository: Repository<SubscriptionEntity>,
+    @InjectRepository(SubscriptionDateEntity)
+    private readonly subscriptionDatesRepository: Repository<SubscriptionDateEntity>,
     @InjectRepository(SubscriptionTransactionEntity)
     private readonly subscriptionTransactionsRepository: Repository<SubscriptionTransactionEntity>
   ) {}
 
   listByHouseholdId(householdId: string) {
-    return orderSubscriptions(this.subscriptionsRepository
+    return orderSubscriptions(joinSubscriptionDetails(this.subscriptionsRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
-      .where('subscription.household_id = :householdId', { householdId }))
+      .where('subscription.household_id = :householdId', { householdId })))
       .getMany()
   }
 
@@ -44,6 +53,13 @@ export class SubscriptionsRepository {
     return orderSubscriptions(this.subscriptionsRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
+      .innerJoinAndSelect(
+        'subscription.dates',
+        'subscriptionDate',
+        'subscriptionDate.date >= :startDate AND subscriptionDate.date <= :endDate',
+        { startDate, endDate }
+      )
       .where('subscription.household_id = :householdId', { householdId })
       .andWhere('subscription.start_date <= :endDate', { endDate })
       .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :startDate)', { startDate }))
@@ -54,6 +70,13 @@ export class SubscriptionsRepository {
     return orderSubscriptions(this.subscriptionsRepository
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
+      .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
+      .innerJoinAndSelect(
+        'subscription.dates',
+        'subscriptionDate',
+        'subscriptionDate.date >= :startDate AND subscriptionDate.date <= :endDate',
+        { startDate, endDate }
+      )
       .where('subscription.user_id = :userId', { userId })
       .andWhere('subscription.start_date <= :endDate', { endDate })
       .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :startDate)', { startDate }))
@@ -63,60 +86,55 @@ export class SubscriptionsRepository {
   listAutopayDueByDate(date: string) {
     return orderSubscriptions(this.subscriptionsRepository
       .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
+      .innerJoinAndSelect('subscription.dates', 'subscriptionDate', 'subscriptionDate.date = :date', { date })
       .where('subscription.autopay = true')
       .andWhere('subscription.start_date <= :date', { date })
-      .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :date)', { date })
-      .andWhere(new Brackets((query) => {
-        query
-          .where('subscription.type = :monthlyType AND EXTRACT(DAY FROM subscription.start_date) = EXTRACT(DAY FROM CAST(:date AS date))', {
-            date,
-            monthlyType: SubscriptionType.Monthly
-          })
-          .orWhere(
-            'subscription.type = :yearlyType AND EXTRACT(MONTH FROM subscription.start_date) = EXTRACT(MONTH FROM CAST(:date AS date)) AND EXTRACT(DAY FROM subscription.start_date) = EXTRACT(DAY FROM CAST(:date AS date))',
-            {
-              date,
-              yearlyType: SubscriptionType.Yearly
-            }
-          )
-      })))
+      .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :date)', { date }))
       .getMany()
   }
 
-  create(input: SaveSubscriptionInput) {
-    return this.subscriptionsRepository.save(this.subscriptionsRepository.create(input))
-  }
+  create(input: SaveSubscriptionInput, ensureDatesThroughDate: string) {
+    return this.subscriptionsRepository.manager.transaction(async (manager) => {
+      const subscription = await manager.save(
+        SubscriptionEntity,
+        manager.create(SubscriptionEntity, {
+          householdId: input.householdId,
+          name: input.name,
+          userId: input.userId,
+          type: input.type,
+          startDate: input.startDate,
+          endDate: input.endDate,
+          autopay: input.autopay
+        })
+      )
 
-  async update(householdId: string, subscriptionId: string, input: Omit<SaveSubscriptionInput, 'householdId'>) {
-    const subscription = await this.subscriptionsRepository.findOne({
-      where: {
-        id: subscriptionId,
-        householdId
-      }
+      await this.upsertSubscriptionAmount(manager, subscription.id, input.startDate, input.amount)
+      await this.ensureSubscriptionDates(manager, [subscription], ensureDatesThroughDate)
+
+      return manager.findOne(SubscriptionEntity, {
+        where: {
+          id: subscription.id
+        },
+        relations: {
+          amounts: true,
+          dates: true,
+          user: true
+        }
+      })
     })
-
-    if (!subscription) {
-      return null
-    }
-
-    this.subscriptionsRepository.merge(subscription, input)
-
-    await this.subscriptionsRepository.save(subscription)
-
-    return this.findByIdAndHouseholdId(subscription.id, householdId)
   }
 
-  async endAndCreateReplacement(
-    householdId: string,
-    subscriptionId: string,
-    currentEndDate: string,
-    replacementInput: SaveSubscriptionInput
-  ) {
+  async update(householdId: string, subscriptionId: string, input: Omit<UpdateSubscriptionInput, 'householdId'>) {
     return this.subscriptionsRepository.manager.transaction(async (manager) => {
       const subscription = await manager.findOne(SubscriptionEntity, {
         where: {
           id: subscriptionId,
           householdId
+        },
+        relations: {
+          amounts: true,
+          dates: true
         }
       })
 
@@ -125,24 +143,28 @@ export class SubscriptionsRepository {
       }
 
       manager.merge(SubscriptionEntity, subscription, {
-        endDate: currentEndDate
+        name: input.name,
+        userId: input.userId,
+        type: input.type,
+        startDate: input.startDate,
+        endDate: input.endDate,
+        autopay: input.autopay
       })
 
       await manager.save(SubscriptionEntity, subscription)
-
-      await manager.delete(SubscriptionTransactionEntity, {
-        subscriptionId,
-        date: MoreThan(currentEndDate)
-      })
-
-      const replacement = await manager.save(SubscriptionEntity, manager.create(SubscriptionEntity, replacementInput))
+      if (shouldUpsertSubscriptionAmount(subscription.amounts || [], input.amountEffectiveDate, input.amount)) {
+        await this.upsertSubscriptionAmount(manager, subscription.id, input.amountEffectiveDate, input.amount)
+      }
+      await this.ensureSubscriptionDates(manager, [subscription], input.ensureDatesThroughDate)
 
       return manager.findOne(SubscriptionEntity, {
         where: {
-          id: replacement.id,
+          id: subscription.id,
           householdId
         },
         relations: {
+          amounts: true,
+          dates: true,
           user: true
         }
       })
@@ -165,6 +187,8 @@ export class SubscriptionsRepository {
         householdId
       },
       relations: {
+        amounts: true,
+        dates: true,
         user: true
       }
     })
@@ -187,6 +211,35 @@ export class SubscriptionsRepository {
     })
 
     return result.affected || 0
+  }
+
+  async deleteSubscriptionDatesAfterDate(subscriptionId: string, date: string) {
+    const result = await this.subscriptionDatesRepository.delete({
+      subscriptionId,
+      date: MoreThan(date)
+    })
+
+    return result.affected || 0
+  }
+
+  async ensureActiveMonthSubscriptionDates(referenceDate: string) {
+    const monthEndDate = getMonthEndDate(referenceDate)
+
+    return this.subscriptionsRepository.manager.transaction(async (manager) => {
+      const subscriptions = await manager.find(SubscriptionEntity, {
+        where: {},
+        relations: {
+          dates: true
+        }
+      })
+      const monthStartDate = getMonthStartDate(referenceDate)
+      const activeSubscriptions = subscriptions.filter((subscription) => {
+        return subscription.startDate <= monthEndDate
+          && (!subscription.endDate || subscription.endDate >= monthStartDate)
+      })
+
+      return this.ensureSubscriptionDates(manager, activeSubscriptions, monthEndDate)
+    })
   }
 
   listSubscriptionTransactionsByHouseholdIdAndDateRange(householdId: string, startDate: string, endDate: string) {
@@ -262,6 +315,49 @@ export class SubscriptionsRepository {
       return Boolean(result.affected)
     })
   }
+
+  private async upsertSubscriptionAmount(manager: EntityManager, subscriptionId: string, date: string, amount: number) {
+    await manager
+      .createQueryBuilder()
+      .insert()
+      .into(SubscriptionAmountEntity)
+      .values({
+        amount,
+        date,
+        subscriptionId
+      })
+      .orUpdate(['amount'], ['subscription_id', 'date'])
+      .execute()
+  }
+
+  private async ensureSubscriptionDates(manager: EntityManager, subscriptions: SubscriptionEntity[], throughDate: string) {
+    const values = subscriptions.flatMap((subscription) => {
+      return buildMissingSubscriptionDates(subscription, throughDate).map(date => ({
+        date,
+        subscriptionId: subscription.id
+      }))
+    })
+
+    if (!values.length) {
+      return 0
+    }
+
+    const result = await manager
+      .createQueryBuilder()
+      .insert()
+      .into(SubscriptionDateEntity)
+      .values(values)
+      .orIgnore()
+      .execute()
+
+    return result.identifiers.length
+  }
+}
+
+function joinSubscriptionDetails(query: SelectQueryBuilder<SubscriptionEntity>) {
+  return query
+    .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
+    .leftJoinAndSelect('subscription.dates', 'subscriptionDate')
 }
 
 function orderSubscriptions(query: SelectQueryBuilder<SubscriptionEntity>) {
@@ -276,4 +372,85 @@ function orderSubscriptionTransactions(query: SelectQueryBuilder<SubscriptionTra
   return query
     .orderBy('subscriptionTransaction.date', 'ASC')
     .addOrderBy('subscriptionTransaction.created_at', 'ASC')
+}
+
+function buildMissingSubscriptionDates(subscription: SubscriptionEntity, throughDate: string) {
+  const dates: string[] = []
+  const existingDates = (subscription.dates || []).map(date => date.date).sort()
+  let candidateDate = existingDates.length ? getNextSubscriptionDate(subscription.type, existingDates[existingDates.length - 1]!) : subscription.startDate
+
+  while (candidateDate <= throughDate) {
+    if (!subscription.endDate || candidateDate <= subscription.endDate) {
+      dates.push(candidateDate)
+    }
+
+    candidateDate = getNextSubscriptionDate(subscription.type, candidateDate)
+  }
+
+  return dates
+}
+
+function getNextSubscriptionDate(type: SubscriptionType, date: string) {
+  const parts = parseDateParts(date)
+
+  if (type === SubscriptionType.Yearly) {
+    return formatUtcDate(getClampedUtcDate(parts.year + 1, parts.month, parts.day))
+  }
+
+  const monthStart = new Date(Date.UTC(parts.year, parts.month, 1))
+
+  return formatUtcDate(getClampedUtcDate(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, parts.day))
+}
+
+function getClampedUtcDate(year: number, month: number, day: number) {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+
+  return new Date(Date.UTC(year, month - 1, Math.min(day, lastDay)))
+}
+
+function getMonthEndDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return formatUtcDate(new Date(Date.UTC(parts.year, parts.month, 0)))
+}
+
+function getMonthStartDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-01`
+}
+
+function shouldUpsertSubscriptionAmount(amounts: SubscriptionAmountEntity[], effectiveDate: string, amount: number) {
+  const currentAmount = getEffectiveSubscriptionAmount(amounts, effectiveDate)
+
+  return currentAmount === null || Number(currentAmount).toFixed(2) !== Number(amount).toFixed(2)
+}
+
+function getEffectiveSubscriptionAmount(amounts: SubscriptionAmountEntity[], date: string) {
+  const sortedAmounts = [...amounts].sort((first, second) => first.date.localeCompare(second.date))
+  let effectiveAmount: number | null = null
+
+  for (const amount of sortedAmounts) {
+    if (amount.date > date) {
+      break
+    }
+
+    effectiveAmount = amount.amount
+  }
+
+  return effectiveAmount ?? sortedAmounts[0]?.amount ?? null
+}
+
+function parseDateParts(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return {
+    year,
+    month,
+    day
+  }
+}
+
+function formatUtcDate(date: Date) {
+  return date.toISOString().slice(0, 10)
 }

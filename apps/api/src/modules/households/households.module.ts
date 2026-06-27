@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { BudgetCategoriesModule } from '../budget-categories/budget-categories.module'
 import { BudgetsModule } from '../budgets/budgets.module'
+import { CreditCardsModule } from '../credit-cards/credit-cards.module'
 import { IncomeModule } from '../income/income.module'
 import { IncomeTypesModule } from '../income-types/income-types.module'
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module'
@@ -16,6 +17,7 @@ import { UserBudgetsController } from './user-budgets.controller'
   imports: [
     BudgetCategoriesModule,
     BudgetsModule,
+    CreditCardsModule,
     IncomeModule,
     IncomeTypesModule,
     SubscriptionsModule,

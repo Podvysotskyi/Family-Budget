@@ -32,6 +32,7 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     await this.ensureBudgetHorizon()
     await this.syncActiveBudgetPeriods()
+    await this.ensureCurrentSubscriptionDates()
   }
 
   @Cron(CronExpression.EVERY_HOUR)
@@ -45,6 +46,7 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
 
       if (this.isMidnightInTimeZone()) {
         await this.syncActiveBudgetPeriods()
+        await this.ensureCurrentSubscriptionDates()
         await this.processSubscriptionAutopay()
       }
     })
@@ -55,6 +57,13 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
     const updatedCount = await this.budgetsRepository.syncActiveStates(referenceDate)
 
     this.logger.log(`Budget period activation updated ${updatedCount} budgets for ${referenceDate}`)
+  }
+
+  async ensureCurrentSubscriptionDates() {
+    const referenceDate = this.getCurrentDateKey()
+    const createdCount = await this.subscriptionsRepository.ensureActiveMonthSubscriptionDates(referenceDate)
+
+    this.logger.log(`Subscription date scheduling created ${createdCount} dates for active month containing ${referenceDate}`)
   }
 
   async processSubscriptionAutopay() {
@@ -130,7 +139,7 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
     }
 
     await this.subscriptionsRepository.createSubscriptionTransaction({
-      amount: subscription.amount,
+      amount: getSubscriptionAmountForDate(subscription, referenceDate),
       date: referenceDate,
       subscriptionId: subscription.id,
       userId: transactionUserId
@@ -241,4 +250,25 @@ function parseDateParts(date: string) {
     month,
     day
   }
+}
+
+function getSubscriptionAmountForDate(subscription: SubscriptionEntity, date: string) {
+  const sortedAmounts = [...(subscription.amounts || [])].sort((first, second) => first.date.localeCompare(second.date))
+  let effectiveAmount: number | null = null
+
+  for (const amount of sortedAmounts) {
+    if (amount.date > date) {
+      break
+    }
+
+    effectiveAmount = amount.amount
+  }
+
+  const amount = effectiveAmount ?? sortedAmounts[0]?.amount
+
+  if (amount === undefined) {
+    throw new Error(`Subscription ${subscription.id} has no amount`)
+  }
+
+  return amount
 }

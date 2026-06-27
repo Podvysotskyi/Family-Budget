@@ -3,6 +3,7 @@ import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
+import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
 import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
@@ -251,6 +252,71 @@ export class HouseholdsController {
     }
 
     return this.householdService.deleteSubscription(householdId, user.id, subscriptionId)
+  }
+
+  @Get(':id/credit-cards')
+  creditCards(@Param('id') householdId: string, @Req() request: AuthenticatedRequest) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.listCreditCards(householdId, user.id)
+  }
+
+  @Post(':id/credit-cards')
+  createCreditCard(
+    @Param('id') householdId: string,
+    @Body() input: SaveCreditCardDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    return this.householdService.createCreditCard(householdId, user.id, input)
+  }
+
+  @Patch(':id/credit-cards/:creditCardId')
+  updateCreditCard(
+    @Param('id') householdId: string,
+    @Param('creditCardId') creditCardId: string,
+    @Body() input: SaveCreditCardDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.updateCreditCard(householdId, user.id, creditCardId, input)
+  }
+
+  @Delete(':id/credit-cards/:creditCardId')
+  deleteCreditCard(
+    @Param('id') householdId: string,
+    @Param('creditCardId') creditCardId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.deleteCreditCard(householdId, user.id, creditCardId)
   }
 }
 

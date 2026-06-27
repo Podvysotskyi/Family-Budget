@@ -12,6 +12,7 @@ const dashboardStore = useDashboardStore()
 await dashboardStore.fetchDashboard()
 const householdSettingsPath = '/settings/household'
 const budgetCategoriesSettingsPath = '/settings/budget-categories'
+const creditCardsPath = '/credit-cards'
 const incomeTypesSettingsPath = '/settings/income-types'
 const userBudgetPath = '/budget'
 const subscriptionsPath = '/subscriptions'
@@ -28,6 +29,12 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
       icon: 'i-lucide-repeat-2',
       to: subscriptionsPath,
       active: route.path.startsWith('/subscriptions')
+    },
+    {
+      label: 'Credit cards',
+      icon: 'i-lucide-credit-card',
+      to: creditCardsPath,
+      active: route.path.startsWith('/credit-cards')
     },
     {
       label: 'Settings',
@@ -64,6 +71,10 @@ const pageTitle = computed(() => {
 
   if (route.path.startsWith('/subscriptions')) {
     return 'Subscriptions'
+  }
+
+  if (route.path.startsWith('/credit-cards')) {
+    return 'Credit cards'
   }
 
   if (route.path === '/settings/budget-categories') {

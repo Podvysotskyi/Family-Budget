@@ -1,4 +1,7 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
+import { CreditCardEntity } from '../../credit-cards/entities/credit-card.entity'
+import { GoalTransactionEntity } from '../../goals/entities/goal-transaction.entity'
+import { GoalEntity } from '../../goals/entities/goal.entity'
 import { HouseholdEntity } from '../../households/entities/household.entity'
 import { IncomeEntity } from '../../income/entities/income.entity'
 import { SubscriptionTransactionEntity } from '../../subscriptions/entities/subscription-transaction.entity'
@@ -39,6 +42,15 @@ export class UserEntity {
 
   @OneToMany(() => IncomeEntity, income => income.user)
   incomes!: IncomeEntity[]
+
+  @OneToMany(() => CreditCardEntity, creditCard => creditCard.user)
+  creditCards!: CreditCardEntity[]
+
+  @OneToMany(() => GoalEntity, goal => goal.user)
+  goals!: GoalEntity[]
+
+  @OneToMany(() => GoalTransactionEntity, goalTransaction => goalTransaction.user)
+  goalTransactions!: GoalTransactionEntity[]
 
   @OneToMany(() => SubscriptionEntity, subscription => subscription.user)
   subscriptions!: SubscriptionEntity[]

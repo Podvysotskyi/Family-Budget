@@ -6,6 +6,9 @@ import type { BudgetCategoryEntity } from '../budget-categories/entities/budget-
 import { buildBudgetInputsForMonth } from '../budgets/budget-windows'
 import { BudgetsRepository, sortBudgetPeriods, toBudgetPeriod } from '../budgets/budgets.repository'
 import { BudgetType } from '../budgets/entities/budget-type'
+import { CreditCardsRepository } from '../credit-cards/credit-cards.repository'
+import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
+import type { CreditCardEntity } from '../credit-cards/entities/credit-card.entity'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
 import type { IncomeEntity } from '../income/entities/income.entity'
 import { IncomeRepository } from '../income/income.repository'
@@ -38,6 +41,7 @@ export class HouseholdService {
   constructor(
     @Inject(BudgetCategoriesRepository) private readonly budgetCategoriesRepository: BudgetCategoriesRepository,
     @Inject(BudgetsRepository) private readonly budgetsRepository: BudgetsRepository,
+    @Inject(CreditCardsRepository) private readonly creditCardsRepository: CreditCardsRepository,
     @Inject(HouseholdsRepository) private readonly householdsRepository: HouseholdsRepository,
     @Inject(IncomeRepository) private readonly incomeRepository: IncomeRepository,
     @Inject(IncomeTypesRepository) private readonly incomeTypesRepository: IncomeTypesRepository,
@@ -274,7 +278,7 @@ export class HouseholdService {
     }
 
     const subscriptionTransaction = await this.subscriptionsRepository.createSubscriptionTransaction({
-      amount: subscription.amount,
+      amount: getSubscriptionAmountForDate(subscription, occurrenceDate),
       date: occurrenceDate,
       subscriptionId: subscription.id,
       userId: currentUserId
@@ -474,12 +478,14 @@ export class HouseholdService {
       endDate: getSubscriptionEndDate(input),
       amount: getSubscriptionAmount(input),
       autopay: getSubscriptionAutopay(input)
-    })
+    }, getCurrentMonthEndDate())
 
-    const savedSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscription.id, householdId)
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
 
     return {
-      subscription: toSubscription(savedSubscription || subscription)
+      subscription: toSubscription(subscription)
     }
   }
 
@@ -501,37 +507,11 @@ export class HouseholdService {
       amount: getSubscriptionAmount(input),
       autopay: getSubscriptionAutopay(input)
     }
-    const hasTransactions = await this.subscriptionsRepository.hasTransactions(currentSubscription.id)
-
-    if (hasTransactions && shouldCreateSubscriptionReplacement(currentSubscription, saveInput)) {
-      const today = getCurrentDateKey()
-      const replacementStartDate = getNextSubscriptionChargeDate(saveInput.type, saveInput.startDate, today)
-
-      if (saveInput.endDate && saveInput.endDate < replacementStartDate) {
-        throw new BadRequestException('Subscription end date must be on or after the next charge date')
-      }
-
-      const replacementSubscription = await this.subscriptionsRepository.endAndCreateReplacement(
-        householdId,
-        currentSubscription.id,
-        today,
-        {
-          householdId,
-          ...saveInput,
-          startDate: replacementStartDate
-        }
-      )
-
-      if (!replacementSubscription) {
-        throw new NotFoundException('Subscription not found')
-      }
-
-      return {
-        subscription: toSubscription(replacementSubscription)
-      }
-    }
-
-    const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, saveInput)
+    const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
+      ...saveInput,
+      amountEffectiveDate: getCurrentDateKey(),
+      ensureDatesThroughDate: getCurrentMonthEndDate()
+    })
 
     if (!subscription) {
       throw new NotFoundException('Subscription not found')
@@ -539,6 +519,7 @@ export class HouseholdService {
 
     if (saveInput.endDate) {
       await this.subscriptionsRepository.deleteTransactionsAfterDate(subscription.id, saveInput.endDate)
+      await this.subscriptionsRepository.deleteSubscriptionDatesAfterDate(subscription.id, saveInput.endDate)
     }
 
     return {
@@ -563,6 +544,107 @@ export class HouseholdService {
     if (!deleted) {
       throw new NotFoundException('Subscription not found')
     }
+
+    return {
+      deleted: true
+    }
+  }
+
+  async listCreditCards(householdId: string, userId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const creditCards = await this.creditCardsRepository.listByHouseholdId(householdId)
+
+    return {
+      creditCards: creditCards
+        .filter(creditCard => !creditCard.userId || creditCard.userId === userId)
+        .map(toCreditCard)
+    }
+  }
+
+  async createCreditCard(householdId: string, userId: string, input: SaveCreditCardDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const creditCardUserId = await this.getCreditCardUserId(householdId, input)
+
+    if (creditCardUserId && creditCardUserId !== userId) {
+      throw new ForbiddenException('Credit cards can only be created for current user or household')
+    }
+
+    const startDate = getCreditCardStartDate(input)
+    const endDate = getCreditCardEndDate(input, startDate)
+    const creditCard = await this.creditCardsRepository.create(
+      {
+        householdId,
+        name: getCreditCardName(input),
+        userId: creditCardUserId,
+        startDate,
+        endDate,
+        dueDate: getCreditCardDueDate(input)
+      },
+      {
+        date: getCreditCardLimitEffectiveDate(input),
+        limit: getCreditCardLimit(input)
+      }
+    )
+
+    if (!creditCard) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    return {
+      creditCard: toCreditCard(creditCard)
+    }
+  }
+
+  async updateCreditCard(householdId: string, userId: string, creditCardId: string, input: SaveCreditCardDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const currentCreditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
+
+    if (!currentCreditCard || (currentCreditCard.userId && currentCreditCard.userId !== userId)) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    const creditCardUserId = await this.getCreditCardUserId(householdId, input)
+
+    if (creditCardUserId && creditCardUserId !== userId) {
+      throw new ForbiddenException('Credit cards can only be assigned to current user or household')
+    }
+
+    const startDate = getCreditCardStartDate(input)
+    const endDate = getCreditCardEndDate(input, startDate)
+    const creditCard = await this.creditCardsRepository.update(
+      householdId,
+      creditCardId,
+      {
+        name: getCreditCardName(input),
+        userId: creditCardUserId,
+        startDate,
+        endDate,
+        dueDate: getCreditCardDueDate(input)
+      },
+      {
+        date: getCreditCardLimitEffectiveDate(input),
+        limit: getCreditCardLimit(input)
+      }
+    )
+
+    if (!creditCard) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    return {
+      creditCard: toCreditCard(creditCard)
+    }
+  }
+
+  async deleteCreditCard(householdId: string, userId: string, creditCardId: string) {
+    await this.requireHouseholdUser(householdId, userId)
+    const creditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
+
+    if (!creditCard || (creditCard.userId && creditCard.userId !== userId)) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    await this.creditCardsRepository.end(householdId, creditCardId, getCurrentDateKey())
 
     return {
       deleted: true
@@ -647,6 +729,28 @@ export class HouseholdService {
 
     if (!user) {
       throw new NotFoundException('Subscription user not found')
+    }
+
+    return user.id
+  }
+
+  private async getCreditCardUserId(householdId: string, input: SaveCreditCardDto) {
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+
+    if (members.length === 1) {
+      return members[0]!.userId
+    }
+
+    const userId = typeof input?.userId === 'string' && input.userId.trim() ? input.userId.trim() : null
+
+    if (!userId) {
+      return null
+    }
+
+    const user = await this.usersRepository.findByHouseholdIdAndUserId(householdId, userId)
+
+    if (!user) {
+      throw new NotFoundException('Credit card user not found')
     }
 
     return user.id
@@ -767,54 +871,72 @@ function getSubscriptionAutopay(input: SaveSubscriptionDto) {
   return input?.autopay === true
 }
 
-function shouldCreateSubscriptionReplacement(
-  currentSubscription: SubscriptionEntity,
-  input: Pick<SubscriptionEntity, 'amount' | 'startDate'>
-) {
-  return Number(currentSubscription.amount).toFixed(2) !== Number(input.amount).toFixed(2)
-    || currentSubscription.startDate !== input.startDate
-}
+function getCreditCardName(input: SaveCreditCardDto) {
+  const name = typeof input?.name === 'string' ? input.name.trim() : ''
 
-function getNextSubscriptionChargeDate(type: SubscriptionType, startDate: string, today: string) {
-  const startDateParts = parseDateParts(startDate)
-  const todayParts = parseDateParts(today)
-
-  if (type === SubscriptionType.Yearly) {
-    for (let yearOffset = 0; yearOffset <= 100; yearOffset += 1) {
-      const candidate = getValidUtcDate(todayParts.year + yearOffset, startDateParts.month, startDateParts.day)
-      const candidateDate = candidate ? formatUtcDate(candidate) : null
-
-      if (candidateDate && candidateDate > today) {
-        return candidateDate
-      }
-    }
-  } else {
-    for (let monthOffset = 0; monthOffset <= 240; monthOffset += 1) {
-      const monthStart = new Date(Date.UTC(todayParts.year, todayParts.month - 1 + monthOffset, 1))
-      const candidate = getValidUtcDate(
-        monthStart.getUTCFullYear(),
-        monthStart.getUTCMonth() + 1,
-        startDateParts.day
-      )
-      const candidateDate = candidate ? formatUtcDate(candidate) : null
-
-      if (candidateDate && candidateDate > today) {
-        return candidateDate
-      }
-    }
+  if (!name) {
+    throw new BadRequestException('Credit card name is required')
   }
 
-  throw new BadRequestException('Could not calculate next subscription charge date')
+  return name
 }
 
-function getValidUtcDate(year: number, month: number, day: number) {
-  const date = new Date(Date.UTC(year, month - 1, day))
+function getCreditCardStartDate(input: SaveCreditCardDto) {
+  const startDate = typeof input?.startDate === 'string' ? input.startDate : ''
 
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+  if (!isDateString(startDate)) {
+    throw new BadRequestException('Credit card start date must be in YYYY-MM-DD format')
+  }
+
+  return startDate
+}
+
+function getCreditCardEndDate(input: SaveCreditCardDto, startDate: string) {
+  const endDate = typeof input?.endDate === 'string' && input.endDate ? input.endDate : null
+
+  if (!endDate) {
     return null
   }
 
-  return date
+  if (!isDateString(endDate)) {
+    throw new BadRequestException('Credit card end date must be in YYYY-MM-DD format')
+  }
+
+  if (endDate < startDate) {
+    throw new BadRequestException('Credit card end date must be on or after the start date')
+  }
+
+  return endDate
+}
+
+function getCreditCardDueDate(input: SaveCreditCardDto) {
+  const dueDate = typeof input?.dueDate === 'string' ? input.dueDate : ''
+
+  if (!isDateString(dueDate)) {
+    throw new BadRequestException('Credit card due date must be in YYYY-MM-DD format')
+  }
+
+  return dueDate
+}
+
+function getCreditCardLimitEffectiveDate(input: SaveCreditCardDto) {
+  const limitEffectiveDate = typeof input?.limitEffectiveDate === 'string' ? input.limitEffectiveDate : ''
+
+  if (!isDateString(limitEffectiveDate)) {
+    throw new BadRequestException('Credit card limit effective date must be in YYYY-MM-DD format')
+  }
+
+  return limitEffectiveDate
+}
+
+function getCreditCardLimit(input: SaveCreditCardDto) {
+  const limit = Number(input?.limit)
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    throw new BadRequestException('Credit card limit must be greater than zero')
+  }
+
+  return limit
 }
 
 function getCurrentDateKey() {
@@ -834,6 +956,12 @@ function getCurrentDateKey() {
   }
 
   return `${year}-${month}-${day}`
+}
+
+function getCurrentMonthEndDate() {
+  const parts = parseDateParts(getCurrentDateKey())
+
+  return formatUtcDate(new Date(Date.UTC(parts.year, parts.month, 0)))
 }
 
 function isDateString(value: string) {
@@ -857,10 +985,41 @@ function toSubscription(subscription: SubscriptionEntity) {
     type: subscription.type,
     startDate: subscription.startDate,
     endDate: subscription.endDate,
-    amount: subscription.amount,
+    amount: getSubscriptionAmountForDate(subscription, getCurrentDateKey()),
     autopay: subscription.autopay,
     createdAt: subscription.createdAt,
     updatedAt: subscription.updatedAt
+  }
+}
+
+function toCreditCard(creditCard: CreditCardEntity) {
+  const sortedLimits = [...(creditCard.limits || [])]
+    .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))
+
+  return {
+    id: creditCard.id,
+    householdId: creditCard.householdId,
+    name: creditCard.name,
+    userId: creditCard.userId,
+    user: creditCard.user
+      ? {
+          userId: creditCard.user.id,
+          name: creditCard.user.name,
+          email: creditCard.user.email,
+          avatarUrl: creditCard.user.avatarUrl
+        }
+      : null,
+    startDate: creditCard.startDate,
+    endDate: creditCard.endDate,
+    dueDate: creditCard.dueDate,
+    currentLimit: sortedLimits[0]?.limit || null,
+    limits: sortedLimits.map(limit => ({
+      id: limit.id,
+      date: limit.date,
+      limit: limit.limit
+    })),
+    createdAt: creditCard.createdAt,
+    updatedAt: creditCard.updatedAt
   }
 }
 
@@ -868,7 +1027,7 @@ function toBudgetSubscriptions(subscription: SubscriptionEntity, budgetStartDate
   return getSubscriptionOccurrenceDates(subscription, budgetStartDate, budgetEndDate).map(occurrenceDate => ({
     id: subscription.id,
     name: subscription.name,
-    amount: subscription.amount,
+    amount: getSubscriptionAmountForDate(subscription, occurrenceDate),
     userId: subscription.userId,
     occurrenceDate
   }))
@@ -885,47 +1044,10 @@ function getSubscriptionOccurrenceDate(subscription: SubscriptionEntity, budgetS
 }
 
 function getSubscriptionOccurrenceDates(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
-  const occurrenceDates: string[] = []
-
-  for (const date of listDateRange(budgetStartDate, budgetEndDate)) {
-    if (date < subscription.startDate) {
-      continue
-    }
-
-    if (subscription.endDate && date > subscription.endDate) {
-      continue
-    }
-
-    if (isSubscriptionOccurrenceDate(subscription, date)) {
-      occurrenceDates.push(date)
-    }
-  }
-
-  return occurrenceDates
-}
-
-function isSubscriptionOccurrenceDate(subscription: SubscriptionEntity, date: string) {
-  const startDateParts = parseDateParts(subscription.startDate)
-  const dateParts = parseDateParts(date)
-
-  if (subscription.type === SubscriptionType.Monthly) {
-    return dateParts.day === startDateParts.day
-  }
-
-  return dateParts.month === startDateParts.month && dateParts.day === startDateParts.day
-}
-
-function listDateRange(startDate: string, endDate: string) {
-  const dates: string[] = []
-  const current = parseUtcDate(startDate)
-  const end = parseUtcDate(endDate)
-
-  while (current <= end) {
-    dates.push(formatUtcDate(current))
-    current.setUTCDate(current.getUTCDate() + 1)
-  }
-
-  return dates
+  return (subscription.dates || [])
+    .map(subscriptionDate => subscriptionDate.date)
+    .filter(date => date >= budgetStartDate && date <= budgetEndDate)
+    .sort()
 }
 
 function parseDateParts(date: string) {
@@ -938,14 +1060,29 @@ function parseDateParts(date: string) {
   }
 }
 
-function parseUtcDate(date: string) {
-  const parts = parseDateParts(date)
-
-  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day))
-}
-
 function formatUtcDate(date: Date) {
   return date.toISOString().slice(0, 10)
+}
+
+function getSubscriptionAmountForDate(subscription: SubscriptionEntity, date: string) {
+  const sortedAmounts = [...(subscription.amounts || [])].sort((first, second) => first.date.localeCompare(second.date))
+  let effectiveAmount: number | null = null
+
+  for (const amount of sortedAmounts) {
+    if (amount.date > date) {
+      break
+    }
+
+    effectiveAmount = amount.amount
+  }
+
+  const amount = effectiveAmount ?? sortedAmounts[0]?.amount
+
+  if (amount === undefined) {
+    throw new BadRequestException('Subscription amount is missing')
+  }
+
+  return amount
 }
 
 function getSubscriptionTransactionSubscriptionId(input: CreateSubscriptionTransactionDto) {
