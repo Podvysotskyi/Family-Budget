@@ -60,6 +60,9 @@ const targetTypeOptions = [
 const trimmedGoalName = computed(() => goalName.value.trim())
 const parsedGoalTargetAmount = computed(() => Number(goalTargetAmount.value))
 const isEditingGoal = computed(() => Boolean(editingGoalId.value))
+const canSaveGoal = computed(() => {
+  return Boolean(!pending.value && trimmedGoalName.value && householdId.value && goalTargetAmount.value)
+})
 const filteredGoals = computed(() => {
   return goals.value.filter(goal => !showOnlyActiveGoals.value || isActiveGoal(goal))
 })
@@ -475,193 +478,44 @@ function getTodayDate() {
       </div>
     </section>
 
-    <UModal
+    <GoalFormModal
+      v-model:name="goalName"
+      v-model:user-id="goalUserId"
+      v-model:start-date="goalStartDate"
+      v-model:end-date="goalEndDate"
+      v-model:include-in-budget="goalIncludeInBudget"
+      v-model:target-type="goalTargetType"
+      v-model:target-amount="goalTargetAmount"
       :open="isGoalModalOpen"
-      :title="isEditingGoal ? 'Edit goal' : 'New goal'"
+      :is-editing="isEditingGoal"
+      :pending="pending"
+      :is-saving="isSavingGoal"
+      :has-household="Boolean(householdId)"
+      :form-error="formError"
+      :assignment-options="assignmentOptions"
+      :target-type-options="targetTypeOptions"
+      :can-save="canSaveGoal"
       @update:open="setGoalModalOpen"
-    >
-      <template #body>
-        <form
-          class="space-y-4"
-          @submit.prevent="saveGoal"
-        >
-          <div class="space-y-2">
-            <label
-              for="goal-name"
-              class="text-sm font-medium text-highlighted"
-            >
-              Name
-            </label>
-            <UInput
-              id="goal-name"
-              v-model="goalName"
-              class="w-full"
-              placeholder="Emergency fund"
-              :disabled="pending || isSavingGoal || !householdId"
-            />
-          </div>
+      @cancel="closeGoalModal"
+      @save="saveGoal"
+    />
 
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <label
-                for="goal-assignment"
-                class="text-sm font-medium text-highlighted"
-              >
-                Assignment
-              </label>
-              <USelect
-                id="goal-assignment"
-                v-model="goalUserId"
-                class="w-full"
-                :items="assignmentOptions"
-                :disabled="pending || isSavingGoal || !householdId"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label
-                for="goal-target-type"
-                class="text-sm font-medium text-highlighted"
-              >
-                Target type
-              </label>
-              <USelect
-                id="goal-target-type"
-                v-model="goalTargetType"
-                class="w-full"
-                :items="targetTypeOptions"
-                :disabled="pending || isSavingGoal || !householdId"
-              />
-            </div>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <label
-                for="goal-start-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                Start date
-              </label>
-              <UInput
-                id="goal-start-date"
-                v-model="goalStartDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingGoal || !householdId"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label
-                for="goal-end-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                End date
-              </label>
-              <UInput
-                id="goal-end-date"
-                v-model="goalEndDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingGoal || !householdId"
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label
-              for="goal-target-amount"
-              class="text-sm font-medium text-highlighted"
-            >
-              Target amount
-            </label>
-            <UInput
-              id="goal-target-amount"
-              v-model="goalTargetAmount"
-              class="w-full"
-              icon="i-lucide-dollar-sign"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              :disabled="pending || isSavingGoal || !householdId"
-            />
-          </div>
-
-          <UCheckbox
-            v-model="goalIncludeInBudget"
-            label="Include in budget"
-            :disabled="pending || isSavingGoal || !householdId"
-          />
-
-          <p
-            v-if="formError"
-            class="text-sm text-error"
-          >
-            {{ formError }}
-          </p>
-        </form>
-      </template>
-
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            label="Cancel"
-            :disabled="isSavingGoal"
-            @click="closeGoalModal"
-          />
-          <UButton
-            color="primary"
-            :label="isEditingGoal ? 'Save goal' : 'Create goal'"
-            :disabled="pending || !trimmedGoalName || !householdId || !goalTargetAmount"
-            :loading="isSavingGoal"
-            @click="saveGoal"
-          />
-        </div>
-      </template>
-    </UModal>
-
-    <ConfirmationModal
+    <GoalCloseModal
       :open="Boolean(goalPendingDelete)"
-      title="Close goal"
-      :description="goalPendingDelete ? `Close ${goalPendingDelete.name}?` : ''"
-      confirm-label="Close"
-      :is-confirming="Boolean(deletingGoalId)"
-      @update:open="value => !value && closeDeletionModal()"
+      :goal-name="goalPendingDelete?.name || ''"
+      :is-closing="Boolean(deletingGoalId)"
+      :error="deletionError"
+      @update:open="(value: boolean) => !value && closeDeletionModal()"
       @confirm="deleteGoal"
-    >
-      <div class="space-y-2">
-        <p>This sets the goal end date to today and keeps transactions intact.</p>
-        <p
-          v-if="deletionError"
-          class="text-sm text-error"
-        >
-          {{ deletionError }}
-        </p>
-      </div>
-    </ConfirmationModal>
+    />
 
-    <ConfirmationModal
+    <GoalDeleteModal
       :open="Boolean(goalPendingPermanentDelete)"
-      title="Delete goal"
-      :description="goalPendingPermanentDelete ? `Permanently delete ${goalPendingPermanentDelete.name}?` : ''"
-      confirm-label="Delete"
-      :is-confirming="Boolean(deletingGoalId)"
-      @update:open="value => !value && closePermanentDeletionModal()"
+      :goal-name="goalPendingPermanentDelete?.name || ''"
+      :is-deleting="Boolean(deletingGoalId)"
+      :error="deletionError"
+      @update:open="(value: boolean) => !value && closePermanentDeletionModal()"
       @confirm="permanentlyDeleteGoal"
-    >
-      <div class="space-y-2">
-        <p>This removes the goal and target history from the database.</p>
-        <p
-          v-if="deletionError"
-          class="text-sm text-error"
-        >
-          {{ deletionError }}
-        </p>
-      </div>
-    </ConfirmationModal>
+    />
   </UContainer>
 </template>

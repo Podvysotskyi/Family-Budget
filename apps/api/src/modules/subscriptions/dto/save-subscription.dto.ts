@@ -6,6 +6,7 @@ export class SaveSubscriptionDto {
   type?: SubscriptionType
   startDate?: string
   endDate?: string | null
+  nextChargeDate?: string | null
   amount?: number
   autopay?: boolean
 }

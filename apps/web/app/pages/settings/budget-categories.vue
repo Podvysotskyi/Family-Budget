@@ -346,7 +346,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
       :description="budgetCategoryPendingDelete ? `Delete ${budgetCategoryPendingDelete.name}?` : ''"
       confirm-label="Delete"
       :is-confirming="Boolean(deletingBudgetCategoryId)"
-      @update:open="value => !value && cancelDeletingBudgetCategory()"
+      @update:open="(value: boolean) => !value && cancelDeletingBudgetCategory()"
       @confirm="deleteBudgetCategory"
     >
       This category will be removed from the household budget setup.

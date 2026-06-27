@@ -293,7 +293,7 @@ async function deleteIncomeType() {
       :description="incomeTypePendingDelete ? `Delete ${incomeTypePendingDelete.text}?` : ''"
       confirm-label="Delete"
       :is-confirming="Boolean(deletingIncomeTypeId)"
-      @update:open="value => !value && cancelDeletingIncomeType()"
+      @update:open="(value: boolean) => !value && cancelDeletingIncomeType()"
       @confirm="deleteIncomeType"
     >
       This income type will be removed from the household.

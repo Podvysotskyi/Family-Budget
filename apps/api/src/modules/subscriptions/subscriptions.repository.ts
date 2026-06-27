@@ -21,6 +21,7 @@ export interface SaveSubscriptionInput {
 export interface UpdateSubscriptionInput extends SaveSubscriptionInput {
   amountEffectiveDate: string
   ensureDatesThroughDate: string
+  nextChargeDate?: string | null
 }
 
 export interface CreateSubscriptionTransactionInput {
@@ -54,12 +55,7 @@ export class SubscriptionsRepository {
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
       .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
-      .innerJoinAndSelect(
-        'subscription.dates',
-        'subscriptionDate',
-        'subscriptionDate.date >= :startDate AND subscriptionDate.date <= :endDate',
-        { startDate, endDate }
-      )
+      .leftJoinAndSelect('subscription.dates', 'subscriptionDate')
       .where('subscription.household_id = :householdId', { householdId })
       .andWhere('subscription.start_date <= :endDate', { endDate })
       .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :startDate)', { startDate }))
@@ -71,12 +67,7 @@ export class SubscriptionsRepository {
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
       .leftJoinAndSelect('subscription.amounts', 'subscriptionAmount')
-      .innerJoinAndSelect(
-        'subscription.dates',
-        'subscriptionDate',
-        'subscriptionDate.date >= :startDate AND subscriptionDate.date <= :endDate',
-        { startDate, endDate }
-      )
+      .leftJoinAndSelect('subscription.dates', 'subscriptionDate')
       .where('subscription.user_id = :userId', { userId })
       .andWhere('subscription.start_date <= :endDate', { endDate })
       .andWhere('(subscription.end_date IS NULL OR subscription.end_date >= :startDate)', { startDate }))
@@ -159,6 +150,10 @@ export class SubscriptionsRepository {
         await this.deleteTransactionsAfterDateWithManager(manager, subscription.id, input.amountEffectiveDate)
       }
       await this.ensureSubscriptionDates(manager, [subscription], input.ensureDatesThroughDate)
+
+      if (input.nextChargeDate) {
+        await this.replaceSubscriptionDateInPeriod(manager, subscription.id, subscription.type, input.nextChargeDate)
+      }
 
       return manager.findOne(SubscriptionEntity, {
         where: {
@@ -340,6 +335,40 @@ export class SubscriptionsRepository {
     })
   }
 
+  private async replaceSubscriptionDateInPeriod(manager: EntityManager, subscriptionId: string, type: SubscriptionType, date: string) {
+    const periodStartDate = type === SubscriptionType.Yearly ? getYearStartDate(date) : getMonthStartDate(date)
+    const periodEndDate = type === SubscriptionType.Yearly ? getYearEndDate(date) : getMonthEndDate(date)
+
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(SubscriptionTransactionEntity)
+      .where('subscription_id = :subscriptionId', { subscriptionId })
+      .andWhere('date >= :periodStartDate', { periodStartDate })
+      .andWhere('date <= :periodEndDate', { periodEndDate })
+      .execute()
+
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(SubscriptionDateEntity)
+      .where('subscription_id = :subscriptionId', { subscriptionId })
+      .andWhere('date >= :periodStartDate', { periodStartDate })
+      .andWhere('date <= :periodEndDate', { periodEndDate })
+      .execute()
+
+    await manager
+      .createQueryBuilder()
+      .insert()
+      .into(SubscriptionDateEntity)
+      .values({
+        date,
+        subscriptionId
+      })
+      .orIgnore()
+      .execute()
+  }
+
   private async ensureSubscriptionDates(manager: EntityManager, subscriptions: SubscriptionEntity[], throughDate: string) {
     const values = subscriptions.flatMap((subscription) => {
       return buildMissingSubscriptionDates(subscription, throughDate).map(date => ({
@@ -428,6 +457,18 @@ function getMonthStartDate(date: string) {
   const parts = parseDateParts(date)
 
   return `${parts.year}-${String(parts.month).padStart(2, '0')}-01`
+}
+
+function getYearStartDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return `${parts.year}-01-01`
+}
+
+function getYearEndDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return `${parts.year}-12-31`
 }
 
 function shouldUpsertSubscriptionAmount(amounts: SubscriptionAmountEntity[], effectiveDate: string, amount: number) {

@@ -27,6 +27,7 @@ import { SubscriptionsRepository } from '../subscriptions/subscriptions.reposito
 import { UsersRepository } from '../users/users.repository'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
 import { HouseholdsRepository } from './households.repository'
+import type { HouseholdMember } from './interfaces/household-member.interface'
 
 export interface BudgetMonthSelection {
   month: number
@@ -512,10 +513,24 @@ export class HouseholdService {
       amount: getSubscriptionAmount(input),
       autopay: getSubscriptionAutopay(input)
     }
+    const nextChargeDate = getSubscriptionNextChargeDate(input)
+
+    if (nextChargeDate) {
+      validateSubscriptionNextChargeDate(nextChargeDate, saveInput.startDate, saveInput.endDate)
+    }
+
+    const existingNextChargeDate = nextChargeDate
+      ? getSubscriptionOccurrenceDate(
+          currentSubscription,
+          getMonthStartDate(nextChargeDate),
+          getMonthEndDate(nextChargeDate)
+        )
+      : null
     const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
       ...saveInput,
       amountEffectiveDate: getCurrentDateKey(),
-      ensureDatesThroughDate: getCurrentMonthEndDate()
+      ensureDatesThroughDate: getCurrentMonthEndDate(),
+      nextChargeDate: nextChargeDate && nextChargeDate !== existingNextChargeDate ? nextChargeDate : null
     })
 
     if (!subscription) {
@@ -558,11 +573,13 @@ export class HouseholdService {
   async listCreditCards(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const creditCards = await this.creditCardsRepository.listByHouseholdId(householdId)
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
 
     return {
       creditCards: creditCards
         .filter(creditCard => !creditCard.userId || creditCard.userId === userId)
-        .map(toCreditCard)
+        .map(creditCard => toCreditCard(creditCard, onlyMember))
     }
   }
 
@@ -1046,6 +1063,30 @@ function getSubscriptionEndDate(input: SaveSubscriptionDto) {
   return endDate
 }
 
+function getSubscriptionNextChargeDate(input: SaveSubscriptionDto) {
+  const nextChargeDate = typeof input?.nextChargeDate === 'string' && input.nextChargeDate ? input.nextChargeDate : null
+
+  if (!nextChargeDate) {
+    return null
+  }
+
+  if (!isDateString(nextChargeDate)) {
+    throw new BadRequestException('Next charge date must be in YYYY-MM-DD format')
+  }
+
+  return nextChargeDate
+}
+
+function validateSubscriptionNextChargeDate(nextChargeDate: string, startDate: string, endDate: string | null) {
+  if (nextChargeDate < startDate) {
+    throw new BadRequestException('Next charge date must be on or after the start date')
+  }
+
+  if (endDate && nextChargeDate > endDate) {
+    throw new BadRequestException('Next charge date must be on or before the end date')
+  }
+}
+
 function getSubscriptionAmount(input: SaveSubscriptionDto) {
   const amount = Number(input?.amount)
 
@@ -1217,6 +1258,18 @@ function getCurrentMonthEndDate() {
   return formatUtcDate(new Date(Date.UTC(parts.year, parts.month, 0)))
 }
 
+function getMonthStartDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-01`
+}
+
+function getMonthEndDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return formatUtcDate(new Date(Date.UTC(parts.year, parts.month, 0)))
+}
+
 function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
@@ -1238,6 +1291,7 @@ function toSubscription(subscription: SubscriptionEntity) {
     type: subscription.type,
     startDate: subscription.startDate,
     endDate: subscription.endDate,
+    nextChargeDate: getNextSubscriptionChargeDate(subscription, getCurrentDateKey()),
     amount: getSubscriptionAmountForDate(subscription, getCurrentDateKey()),
     autopay: subscription.autopay,
     createdAt: subscription.createdAt,
@@ -1245,23 +1299,31 @@ function toSubscription(subscription: SubscriptionEntity) {
   }
 }
 
-function toCreditCard(creditCard: CreditCardEntity) {
+function toCreditCard(creditCard: CreditCardEntity, assignedUser: HouseholdMember | null = null) {
   const sortedLimits = [...(creditCard.limits || [])]
     .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))
+  const user = creditCard.user
+    ? {
+        userId: creditCard.user.id,
+        name: creditCard.user.name,
+        email: creditCard.user.email,
+        avatarUrl: creditCard.user.avatarUrl
+      }
+    : assignedUser
+      ? {
+          userId: assignedUser.userId,
+          name: assignedUser.name,
+          email: assignedUser.email,
+          avatarUrl: assignedUser.avatarUrl
+        }
+      : null
 
   return {
     id: creditCard.id,
     householdId: creditCard.householdId,
     name: creditCard.name,
-    userId: creditCard.userId,
-    user: creditCard.user
-      ? {
-          userId: creditCard.user.id,
-          name: creditCard.user.name,
-          email: creditCard.user.email,
-          avatarUrl: creditCard.user.avatarUrl
-        }
-      : null,
+    userId: creditCard.userId || assignedUser?.userId || null,
+    user,
     startDate: creditCard.startDate,
     endDate: creditCard.endDate,
     dueDate: creditCard.dueDate,
@@ -1312,10 +1374,14 @@ function getSubscriptionOccurrenceDate(subscription: SubscriptionEntity, budgetS
 }
 
 function getSubscriptionOccurrenceDates(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
-  return (subscription.dates || [])
-    .map(subscriptionDate => subscriptionDate.date)
-    .filter(date => date >= budgetStartDate && date <= budgetEndDate)
-    .sort()
+  const occurrenceStartDate = subscription.startDate > budgetStartDate ? subscription.startDate : budgetStartDate
+  const occurrenceEndDate = subscription.endDate && subscription.endDate < budgetEndDate ? subscription.endDate : budgetEndDate
+
+  if (occurrenceStartDate > occurrenceEndDate) {
+    return []
+  }
+
+  return getSubscriptionOccurrenceDatesFromSchedule(subscription, occurrenceStartDate, occurrenceEndDate)
 }
 
 function parseDateParts(date: string) {
@@ -1330,6 +1396,99 @@ function parseDateParts(date: string) {
 
 function formatUtcDate(date: Date) {
   return date.toISOString().slice(0, 10)
+}
+
+function getNextSubscriptionChargeDate(subscription: SubscriptionEntity, referenceDate: string) {
+  const searchEndDate = subscription.type === SubscriptionType.Yearly
+    ? addYearsToDateKey(referenceDate, 2)
+    : addMonthsToDateKey(referenceDate, 24)
+
+  return getSubscriptionOccurrenceDates(subscription, referenceDate, searchEndDate)[0] || null
+}
+
+function getSubscriptionOccurrenceDatesFromSchedule(subscription: SubscriptionEntity, rangeStartDate: string, rangeEndDate: string) {
+  const dates: string[] = []
+  const existingDatesByPeriod = getExistingSubscriptionDatesByPeriod(subscription)
+  let candidateDate = subscription.startDate
+
+  while (candidateDate <= rangeEndDate) {
+    const periodKey = getSubscriptionDatePeriodKey(subscription.type, candidateDate)
+    const existingDate = existingDatesByPeriod.get(periodKey)
+    const occurrenceDate = existingDate || candidateDate
+
+    if (occurrenceDate >= rangeStartDate && occurrenceDate <= rangeEndDate) {
+      dates.push(occurrenceDate)
+    }
+
+    candidateDate = getNextSubscriptionOccurrenceDate(subscription.type, occurrenceDate)
+  }
+
+  return dates
+}
+
+function getExistingSubscriptionDatesByPeriod(subscription: SubscriptionEntity) {
+  const datesByPeriod = new Map<string, string>()
+
+  for (const date of (subscription.dates || []).map(subscriptionDate => subscriptionDate.date).sort()) {
+    datesByPeriod.set(getSubscriptionDatePeriodKey(subscription.type, date), date)
+  }
+
+  return datesByPeriod
+}
+
+function getSubscriptionDatePeriodKey(type: SubscriptionType, date: string) {
+  const parts = parseDateParts(date)
+
+  if (type === SubscriptionType.Yearly) {
+    return String(parts.year)
+  }
+
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}`
+}
+
+function getNextSubscriptionOccurrenceDate(type: SubscriptionType, date: string) {
+  const parts = parseDateParts(date)
+
+  if (type === SubscriptionType.Yearly) {
+    return formatUtcDate(getClampedUtcDate(parts.year + 1, parts.month, parts.day))
+  }
+
+  const nextMonth = getNextMonth(parts.year, parts.month)
+
+  return formatUtcDate(getClampedUtcDate(nextMonth.year, nextMonth.month, parts.day))
+}
+
+function addMonthsToDateKey(date: string, monthCount: number) {
+  const parts = parseDateParts(date)
+  const nextDate = new Date(Date.UTC(parts.year, parts.month - 1 + monthCount, parts.day))
+
+  return formatUtcDate(nextDate)
+}
+
+function addYearsToDateKey(date: string, yearCount: number) {
+  const parts = parseDateParts(date)
+
+  return formatUtcDate(getClampedUtcDate(parts.year + yearCount, parts.month, parts.day))
+}
+
+function getNextMonth(year: number, month: number) {
+  if (month === 12) {
+    return {
+      year: year + 1,
+      month: 1
+    }
+  }
+
+  return {
+    year,
+    month: month + 1
+  }
+}
+
+function getClampedUtcDate(year: number, month: number, day: number) {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+
+  return new Date(Date.UTC(year, month - 1, Math.min(day, lastDay)))
 }
 
 function getSubscriptionAmountForDate(subscription: SubscriptionEntity, date: string) {

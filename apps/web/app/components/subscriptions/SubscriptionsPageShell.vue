@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { parseDate } from '@internationalized/date'
-import type { DateValue } from '@internationalized/date'
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { Subscription, SubscriptionType } from '~/stores/subscriptions'
-
-type CalendarModelValue = DateValue | DateValue[] | { start?: DateValue, end?: DateValue } | null | undefined
 
 defineOptions({
   name: 'SubscriptionsPageShell'
@@ -41,6 +37,8 @@ const subscriptionName = ref('')
 const subscriptionType = ref<SubscriptionType>('monthly')
 const subscriptionStartDate = ref(getTodayDate())
 const subscriptionEndDate = ref('')
+const subscriptionNextChargeDate = ref('')
+const originalSubscriptionNextChargeDate = ref<string | null>(null)
 const subscriptionAmount = ref('')
 const subscriptionAutopay = ref(false)
 const typeOptions = [
@@ -75,9 +73,15 @@ const subscriptionNavigationItems = computed<NavigationMenuItem[]>(() => {
 const trimmedSubscriptionName = computed(() => subscriptionName.value.trim())
 const isEditingSubscription = computed(() => Boolean(editingSubscriptionId.value))
 const parsedSubscriptionAmount = computed(() => Number(subscriptionAmount.value))
-const subscriptionStartCalendarDate = computed(() => parseCalendarDate(subscriptionStartDate.value))
-const subscriptionEndCalendarDate = computed(() => parseCalendarDate(subscriptionEndDate.value))
-const cancellationEffectiveCalendarDate = computed(() => parseCalendarDate(cancellationEffectiveDate.value))
+const canSaveSubscription = computed(() => {
+  return Boolean(
+    !pending.value
+    && trimmedSubscriptionName.value
+    && householdId.value
+    && subscriptionStartDate.value
+    && subscriptionAmount.value
+  )
+})
 const canCreateSubscription = computed(() => {
   return assignmentFilter.value === unassignedUserValue || assignmentFilter.value === dashboardStore.user?.id
 })
@@ -129,6 +133,8 @@ function resetForm() {
   subscriptionType.value = 'monthly'
   subscriptionStartDate.value = getTodayDate()
   subscriptionEndDate.value = ''
+  subscriptionNextChargeDate.value = ''
+  originalSubscriptionNextChargeDate.value = null
   subscriptionAmount.value = ''
   subscriptionAutopay.value = false
 }
@@ -167,6 +173,8 @@ function startEditingSubscription(subscription: Subscription) {
   subscriptionType.value = subscription.type
   subscriptionStartDate.value = subscription.startDate
   subscriptionEndDate.value = subscription.endDate || ''
+  subscriptionNextChargeDate.value = subscription.nextChargeDate || subscription.startDate
+  originalSubscriptionNextChargeDate.value = subscription.nextChargeDate || subscription.startDate
   subscriptionAmount.value = String(subscription.amount)
   subscriptionAutopay.value = subscription.autopay
   isSubscriptionModalOpen.value = true
@@ -221,6 +229,21 @@ async function saveSubscription() {
     return
   }
 
+  if (isEditingSubscription.value && !subscriptionNextChargeDate.value) {
+    formError.value = 'Next charge date is required.'
+    return
+  }
+
+  if (isEditingSubscription.value && subscriptionNextChargeDate.value < subscriptionStartDate.value) {
+    formError.value = 'Next charge date must be on or after the start date.'
+    return
+  }
+
+  if (isEditingSubscription.value && subscriptionEndDate.value && subscriptionNextChargeDate.value > subscriptionEndDate.value) {
+    formError.value = 'Next charge date must be on or before the end date.'
+    return
+  }
+
   if (!Number.isFinite(parsedSubscriptionAmount.value) || parsedSubscriptionAmount.value <= 0) {
     formError.value = 'Amount must be greater than zero.'
     return
@@ -240,7 +263,12 @@ async function saveSubscription() {
     }
 
     if (editingSubscriptionId.value) {
-      await subscriptionsStore.updateSubscription(householdId.value, editingSubscriptionId.value, input)
+      await subscriptionsStore.updateSubscription(householdId.value, editingSubscriptionId.value, {
+        ...input,
+        nextChargeDate: subscriptionNextChargeDate.value !== originalSubscriptionNextChargeDate.value
+          ? subscriptionNextChargeDate.value
+          : null
+      })
     } else {
       await subscriptionsStore.createSubscription(householdId.value, input)
     }
@@ -357,41 +385,6 @@ function formatCurrency(value: number) {
   }).format(value)
 }
 
-function setSubscriptionCalendarDate(field: 'start' | 'end', value: CalendarModelValue, close: () => void) {
-  const calendarDate = getSingleCalendarDate(value)
-  const date = calendarDate?.toString() || ''
-
-  if (field === 'start') {
-    subscriptionStartDate.value = date
-  } else {
-    subscriptionEndDate.value = date
-  }
-
-  close()
-}
-
-function getSingleCalendarDate(value: CalendarModelValue) {
-  if (!value || Array.isArray(value) || 'start' in value || 'end' in value) {
-    return undefined
-  }
-
-  return value
-}
-
-function clearSubscriptionEndDate() {
-  subscriptionEndDate.value = ''
-}
-
-function setCancellationEffectiveDate(value: CalendarModelValue, close: () => void) {
-  const calendarDate = getSingleCalendarDate(value)
-
-  if (calendarDate) {
-    cancellationEffectiveDate.value = calendarDate.toString()
-  }
-
-  close()
-}
-
 function isActiveSubscription(subscription: Subscription) {
   const today = getTodayDate()
 
@@ -428,22 +421,6 @@ function formatDate(value: string | null) {
     day: 'numeric',
     year: 'numeric'
   })
-}
-
-function formatDatePickerLabel(value: string, fallback: string) {
-  return value ? formatDate(value) : fallback
-}
-
-function parseCalendarDate(value: string) {
-  if (!isDateString(value)) {
-    return undefined
-  }
-
-  return parseDate(value)
-}
-
-function isDateString(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
 function getTodayDate() {
@@ -550,6 +527,12 @@ function getTodayDate() {
             <p class="mt-1 text-sm text-muted">
               {{ getSubscriptionAssignmentLabel(subscription) }} · {{ formatCurrency(subscription.amount) }} · {{ formatDate(subscription.startDate) }} - {{ formatDate(subscription.endDate) }}
             </p>
+            <p
+              v-if="subscription.nextChargeDate"
+              class="mt-1 text-sm text-muted"
+            >
+              Next charge {{ formatDate(subscription.nextChargeDate) }}
+            </p>
           </div>
 
           <div class="flex items-center gap-1">
@@ -589,264 +572,45 @@ function getTodayDate() {
       </div>
     </section>
 
-    <UModal
+    <SubscriptionFormModal
+      v-model:name="subscriptionName"
+      v-model:amount="subscriptionAmount"
+      v-model:type="subscriptionType"
+      v-model:start-date="subscriptionStartDate"
+      v-model:end-date="subscriptionEndDate"
+      v-model:next-charge-date="subscriptionNextChargeDate"
+      v-model:autopay="subscriptionAutopay"
       :open="isSubscriptionModalOpen"
-      :title="isEditingSubscription ? 'Edit subscription' : 'New subscription'"
+      :is-editing="isEditingSubscription"
+      :pending="pending"
+      :is-saving="isSavingSubscription"
+      :has-household="Boolean(householdId)"
+      :form-error="formError"
+      :type-options="typeOptions"
+      :can-save="canSaveSubscription"
       @update:open="setSubscriptionModalOpen"
-    >
-      <template #body>
-        <form
-          class="space-y-4"
-          @submit.prevent="saveSubscription"
-        >
-          <div class="space-y-2">
-            <label
-              for="subscription-name"
-              class="text-sm font-medium text-highlighted"
-            >
-              Name
-            </label>
-            <UInput
-              id="subscription-name"
-              v-model="subscriptionName"
-              class="w-full"
-              placeholder="Netflix"
-              :disabled="pending || isSavingSubscription || !householdId"
-            />
-          </div>
+      @cancel="closeSubscriptionModal"
+      @save="saveSubscription"
+    />
 
-          <div class="space-y-2">
-            <label
-              for="subscription-amount"
-              class="text-sm font-medium text-highlighted"
-            >
-              Amount
-            </label>
-            <UInput
-              id="subscription-amount"
-              v-model="subscriptionAmount"
-              class="w-full"
-              icon="i-lucide-dollar-sign"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              :disabled="pending || isSavingSubscription || !householdId"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <label class="text-sm font-medium text-highlighted">
-              Type
-            </label>
-            <USelect
-              v-model="subscriptionType"
-              class="w-full"
-              :items="typeOptions"
-              :disabled="pending || isSavingSubscription || !householdId"
-            />
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <label
-                for="subscription-start-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                Start date
-              </label>
-              <UPopover :content="{ align: 'start' }">
-                <UButton
-                  id="subscription-start-date"
-                  block
-                  class="justify-start"
-                  color="neutral"
-                  variant="outline"
-                  icon="i-lucide-calendar-days"
-                  :label="formatDatePickerLabel(subscriptionStartDate, 'Select start date')"
-                  :disabled="pending || isSavingSubscription || !householdId"
-                />
-
-                <template #content="{ close }">
-                  <UCalendar
-                    :model-value="subscriptionStartCalendarDate"
-                    class="p-2"
-                    @update:model-value="value => setSubscriptionCalendarDate('start', value, close)"
-                  />
-                </template>
-              </UPopover>
-            </div>
-
-            <div class="space-y-2">
-              <label
-                for="subscription-end-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                End date
-              </label>
-              <div class="flex gap-2">
-                <UPopover
-                  class="min-w-0 flex-1"
-                  :content="{ align: 'start' }"
-                >
-                  <UButton
-                    id="subscription-end-date"
-                    block
-                    class="justify-start"
-                    color="neutral"
-                    variant="outline"
-                    icon="i-lucide-calendar-days"
-                    :label="formatDatePickerLabel(subscriptionEndDate, 'No end date')"
-                    :disabled="pending || isSavingSubscription || !householdId"
-                  />
-
-                  <template #content="{ close }">
-                    <UCalendar
-                      :model-value="subscriptionEndCalendarDate"
-                      class="p-2"
-                      @update:model-value="value => setSubscriptionCalendarDate('end', value, close)"
-                    />
-                  </template>
-                </UPopover>
-
-                <UButton
-                  v-if="subscriptionEndDate"
-                  icon="i-lucide-x"
-                  color="neutral"
-                  variant="ghost"
-                  aria-label="Clear end date"
-                  :disabled="pending || isSavingSubscription || !householdId"
-                  @click="clearSubscriptionEndDate"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div class="rounded-lg border border-default px-3 py-2">
-            <USwitch
-              v-model="subscriptionAutopay"
-              label="Autopay"
-              description="Automatically mark this subscription as paid on its due date."
-              :disabled="pending || isSavingSubscription || !householdId"
-            />
-          </div>
-
-          <p
-            v-if="formError"
-            class="text-sm text-error"
-          >
-            {{ formError }}
-          </p>
-        </form>
-      </template>
-
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            label="Cancel"
-            :disabled="isSavingSubscription"
-            @click="closeSubscriptionModal"
-          />
-          <UButton
-            color="primary"
-            :label="isEditingSubscription ? 'Save subscription' : 'Create subscription'"
-            :disabled="pending || !trimmedSubscriptionName || !householdId || !subscriptionStartDate || !subscriptionAmount"
-            :loading="isSavingSubscription"
-            @click="saveSubscription"
-          />
-        </div>
-      </template>
-    </UModal>
-
-    <UModal
+    <SubscriptionCancellationModal
+      v-model:effective-date="cancellationEffectiveDate"
       :open="Boolean(subscriptionPendingCancel)"
-      title="Cancel subscription"
-      @update:open="value => !value && closeCancellationModal()"
-    >
-      <template #body>
-        <div class="space-y-4">
-          <p class="text-sm text-muted">
-            {{ subscriptionPendingCancel ? `Set the cancellation date for ${subscriptionPendingCancel.name}.` : '' }}
-          </p>
+      :subscription-name="subscriptionPendingCancel?.name || ''"
+      :is-canceling="Boolean(cancelingSubscriptionId)"
+      :error="cancellationError"
+      @update:open="(value: boolean) => !value && closeCancellationModal()"
+      @keep="closeCancellationModal"
+      @cancel-subscription="cancelSubscription"
+    />
 
-          <div class="space-y-2">
-            <label
-              for="subscription-cancellation-effective-date"
-              class="text-sm font-medium text-highlighted"
-            >
-              Effective date
-            </label>
-            <UPopover :content="{ align: 'start' }">
-              <UButton
-                id="subscription-cancellation-effective-date"
-                block
-                class="justify-start"
-                color="neutral"
-                variant="outline"
-                icon="i-lucide-calendar-days"
-                :label="formatDatePickerLabel(cancellationEffectiveDate, 'Select effective date')"
-                :disabled="Boolean(cancelingSubscriptionId)"
-              />
-
-              <template #content="{ close }">
-                <UCalendar
-                  :model-value="cancellationEffectiveCalendarDate"
-                  class="p-2"
-                  @update:model-value="value => setCancellationEffectiveDate(value, close)"
-                />
-              </template>
-            </UPopover>
-          </div>
-
-          <p
-            v-if="cancellationError"
-            class="text-sm text-error"
-          >
-            {{ cancellationError }}
-          </p>
-        </div>
-      </template>
-
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            label="Keep subscription"
-            :disabled="Boolean(cancelingSubscriptionId)"
-            @click="closeCancellationModal"
-          />
-          <UButton
-            color="warning"
-            label="Cancel subscription"
-            :disabled="!cancellationEffectiveDate"
-            :loading="Boolean(cancelingSubscriptionId)"
-            @click="cancelSubscription"
-          />
-        </div>
-      </template>
-    </UModal>
-
-    <ConfirmationModal
+    <SubscriptionDeleteModal
       :open="Boolean(subscriptionPendingDelete)"
-      title="Delete subscription"
-      :description="subscriptionPendingDelete ? `Delete ${subscriptionPendingDelete.name}?` : ''"
-      confirm-label="Delete"
-      :is-confirming="Boolean(deletingSubscriptionId)"
-      @update:open="value => !value && closeDeletionModal()"
+      :subscription-name="subscriptionPendingDelete?.name || ''"
+      :is-deleting="Boolean(deletingSubscriptionId)"
+      :error="deletionError"
+      @update:open="(value: boolean) => !value && closeDeletionModal()"
       @confirm="deleteSubscription"
-    >
-      <div class="space-y-2">
-        <p>This subscription will be permanently removed from the household.</p>
-        <p
-          v-if="deletionError"
-          class="text-sm text-error"
-        >
-          {{ deletionError }}
-        </p>
-      </div>
-    </ConfirmationModal>
+    />
   </UContainer>
 </template>

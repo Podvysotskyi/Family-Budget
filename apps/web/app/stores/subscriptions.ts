@@ -14,6 +14,7 @@ export type Subscription = {
   type: SubscriptionType
   startDate: string
   endDate: string | null
+  nextChargeDate: string | null
   amount: number
   autopay: boolean
   createdAt: string
@@ -26,6 +27,7 @@ export type SaveSubscriptionInput = {
   type: SubscriptionType
   startDate: string
   endDate: string | null
+  nextChargeDate?: string | null
   amount: number
   autopay: boolean
 }

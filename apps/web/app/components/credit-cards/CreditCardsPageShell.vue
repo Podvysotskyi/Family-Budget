@@ -10,6 +10,7 @@ const dashboardStore = useDashboardStore()
 const creditCardsStore = useCreditCardsStore()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
+const members = computed(() => dashboardStore.members)
 const creditCards = computed(() => creditCardsStore.getCreditCards(householdId.value))
 const pending = computed(() => creditCardsStore.isLoading(householdId.value))
 const error = computed(() => creditCardsStore.getError(householdId.value))
@@ -28,12 +29,15 @@ const creditCardEndDate = ref('')
 const creditCardDueDate = ref(getTodayDate())
 const creditCardLimit = ref('')
 const creditCardLimitEffectiveDate = ref(getTodayDate())
+const hasMultipleMembers = computed(() => members.value.length > 1)
 const assignmentOptions = computed(() => {
   return [
-    {
-      label: 'Household',
-      value: householdAssignmentValue
-    },
+    ...(hasMultipleMembers.value
+      ? [{
+          label: 'Household',
+          value: householdAssignmentValue
+        }]
+      : []),
     ...(dashboardStore.user
       ? [{
           label: dashboardStore.user.name || dashboardStore.user.email,
@@ -45,6 +49,9 @@ const assignmentOptions = computed(() => {
 const trimmedCreditCardName = computed(() => creditCardName.value.trim())
 const parsedCreditCardLimit = computed(() => Number(creditCardLimit.value))
 const isEditingCreditCard = computed(() => Boolean(editingCreditCardId.value))
+const canSaveCreditCard = computed(() => {
+  return Boolean(!pending.value && trimmedCreditCardName.value && householdId.value && creditCardLimit.value)
+})
 const filteredCreditCards = computed(() => {
   return creditCards.value.filter(creditCard => !showOnlyActiveCreditCards.value || isActiveCreditCard(creditCard))
 })
@@ -67,7 +74,13 @@ watch(householdId, async (id) => {
 })
 
 watch(() => dashboardStore.user?.id, () => {
-  if (!creditCardUserId.value) {
+  if (!creditCardUserId.value || (!hasMultipleMembers.value && creditCardUserId.value === householdAssignmentValue)) {
+    creditCardUserId.value = getDefaultCreditCardUserId()
+  }
+}, { immediate: true })
+
+watch(hasMultipleMembers, (multipleMembers) => {
+  if (!multipleMembers && creditCardUserId.value === householdAssignmentValue) {
     creditCardUserId.value = getDefaultCreditCardUserId()
   }
 }, { immediate: true })
@@ -116,7 +129,7 @@ function startEditingCreditCard(creditCard: CreditCard) {
   formError.value = null
   editingCreditCardId.value = creditCard.id
   creditCardName.value = creditCard.name
-  creditCardUserId.value = creditCard.userId || householdAssignmentValue
+  creditCardUserId.value = creditCard.userId || getDefaultCreditCardUserId()
   creditCardStartDate.value = creditCard.startDate
   creditCardEndDate.value = creditCard.endDate || ''
   creditCardDueDate.value = creditCard.dueDate
@@ -229,14 +242,26 @@ async function deleteCreditCard() {
 }
 
 function getCreditCardUserId() {
+  if (!hasMultipleMembers.value) {
+    return dashboardStore.user?.id || null
+  }
+
   return creditCardUserId.value === householdAssignmentValue ? null : creditCardUserId.value
 }
 
 function getDefaultCreditCardUserId() {
+  if (!hasMultipleMembers.value) {
+    return dashboardStore.user?.id || ''
+  }
+
   return dashboardStore.user?.id || householdAssignmentValue
 }
 
 function getCreditCardAssignmentLabel(creditCard: CreditCard) {
+  if (!creditCard.user && !hasMultipleMembers.value && dashboardStore.user) {
+    return dashboardStore.user.name || dashboardStore.user.email
+  }
+
   if (!creditCard.user) {
     return 'Household'
   }
@@ -414,183 +439,34 @@ function getTodayDate() {
       </div>
     </section>
 
-    <UModal
+    <CreditCardFormModal
+      v-model:name="creditCardName"
+      v-model:user-id="creditCardUserId"
+      v-model:start-date="creditCardStartDate"
+      v-model:end-date="creditCardEndDate"
+      v-model:due-date="creditCardDueDate"
+      v-model:limit="creditCardLimit"
+      v-model:limit-effective-date="creditCardLimitEffectiveDate"
       :open="isCreditCardModalOpen"
-      :title="isEditingCreditCard ? 'Edit credit card' : 'New credit card'"
+      :is-editing="isEditingCreditCard"
+      :pending="pending"
+      :is-saving="isSavingCreditCard"
+      :has-household="Boolean(householdId)"
+      :form-error="formError"
+      :assignment-options="assignmentOptions"
+      :can-save="canSaveCreditCard"
       @update:open="setCreditCardModalOpen"
-    >
-      <template #body>
-        <form
-          class="space-y-4"
-          @submit.prevent="saveCreditCard"
-        >
-          <div class="space-y-2">
-            <label
-              for="credit-card-name"
-              class="text-sm font-medium text-highlighted"
-            >
-              Name
-            </label>
-            <UInput
-              id="credit-card-name"
-              v-model="creditCardName"
-              class="w-full"
-              placeholder="Sapphire Preferred"
-              :disabled="pending || isSavingCreditCard || !householdId"
-            />
-          </div>
+      @cancel="closeCreditCardModal"
+      @save="saveCreditCard"
+    />
 
-          <div class="space-y-2">
-            <label
-              for="credit-card-assignment"
-              class="text-sm font-medium text-highlighted"
-            >
-              Assignment
-            </label>
-            <USelect
-              id="credit-card-assignment"
-              v-model="creditCardUserId"
-              class="w-full"
-              :items="assignmentOptions"
-              :disabled="pending || isSavingCreditCard || !householdId"
-            />
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <label
-                for="credit-card-start-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                Start date
-              </label>
-              <UInput
-                id="credit-card-start-date"
-                v-model="creditCardStartDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingCreditCard || !householdId"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label
-                for="credit-card-end-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                End date
-              </label>
-              <UInput
-                id="credit-card-end-date"
-                v-model="creditCardEndDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingCreditCard || !householdId"
-              />
-            </div>
-          </div>
-
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-2">
-              <label
-                for="credit-card-due-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                Due date
-              </label>
-              <UInput
-                id="credit-card-due-date"
-                v-model="creditCardDueDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingCreditCard || !householdId"
-              />
-            </div>
-
-            <div class="space-y-2">
-              <label
-                for="credit-card-limit-effective-date"
-                class="text-sm font-medium text-highlighted"
-              >
-                Limit effective date
-              </label>
-              <UInput
-                id="credit-card-limit-effective-date"
-                v-model="creditCardLimitEffectiveDate"
-                class="w-full"
-                type="date"
-                :disabled="pending || isSavingCreditCard || !householdId"
-              />
-            </div>
-          </div>
-
-          <div class="space-y-2">
-            <label
-              for="credit-card-limit"
-              class="text-sm font-medium text-highlighted"
-            >
-              Limit
-            </label>
-            <UInput
-              id="credit-card-limit"
-              v-model="creditCardLimit"
-              class="w-full"
-              icon="i-lucide-dollar-sign"
-              type="number"
-              min="0.01"
-              step="0.01"
-              placeholder="0.00"
-              :disabled="pending || isSavingCreditCard || !householdId"
-            />
-          </div>
-
-          <p
-            v-if="formError"
-            class="text-sm text-error"
-          >
-            {{ formError }}
-          </p>
-        </form>
-      </template>
-
-      <template #footer>
-        <div class="flex w-full justify-end gap-2">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            label="Cancel"
-            :disabled="isSavingCreditCard"
-            @click="closeCreditCardModal"
-          />
-          <UButton
-            color="primary"
-            :label="isEditingCreditCard ? 'Save credit card' : 'Create credit card'"
-            :disabled="pending || !trimmedCreditCardName || !householdId || !creditCardLimit"
-            :loading="isSavingCreditCard"
-            @click="saveCreditCard"
-          />
-        </div>
-      </template>
-    </UModal>
-
-    <ConfirmationModal
+    <CreditCardCloseModal
       :open="Boolean(creditCardPendingDelete)"
-      title="Close credit card"
-      :description="creditCardPendingDelete ? `Close ${creditCardPendingDelete.name}?` : ''"
-      confirm-label="Close"
-      :is-confirming="Boolean(deletingCreditCardId)"
-      @update:open="value => !value && closeDeletionModal()"
+      :credit-card-name="creditCardPendingDelete?.name || ''"
+      :is-closing="Boolean(deletingCreditCardId)"
+      :error="deletionError"
+      @update:open="(value: boolean) => !value && closeDeletionModal()"
       @confirm="deleteCreditCard"
-    >
-      <div class="space-y-2">
-        <p>This sets the card end date to today and keeps historical records intact.</p>
-        <p
-          v-if="deletionError"
-          class="text-sm text-error"
-        >
-          {{ deletionError }}
-        </p>
-      </div>
-    </ConfirmationModal>
+    />
   </UContainer>
 </template>
