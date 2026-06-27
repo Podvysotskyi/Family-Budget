@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Query, Req } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Query, Req } from '@nestjs/common'
 import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
+import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
 import { HouseholdService } from './households.service'
 
 @Controller()
@@ -28,28 +29,6 @@ export class UserBudgetsController {
     )
   }
 
-  @Get('users/:id/budget-period/week')
-  userBudgetWeekPeriod(
-    @Param('id') budgetUserId: string,
-    @Query('month') month: string | undefined,
-    @Query('year') year: string | undefined,
-    @Query('startDate') startDate: string | undefined,
-    @Req() request: AuthenticatedRequest
-  ) {
-    const user = requireRequestUser(request)
-
-    if (!budgetUserId) {
-      throw new BadRequestException('User id is required')
-    }
-
-    return this.householdService.getUserBudgetWeekPeriodForCurrentUser(
-      user.id,
-      budgetUserId,
-      parseBudgetMonthQuery(month, year),
-      parseBudgetWeekStartDateQuery(startDate)
-    )
-  }
-
   @Get('user/:id/budget/:budgetId/income')
   userIncome(
     @Param('id') budgetUserId: string,
@@ -67,6 +46,85 @@ export class UserBudgetsController {
     }
 
     return this.householdService.listIncomeForCurrentUser(user.id, budgetUserId, budgetId)
+  }
+
+  @Get('user/:id/subscriptions')
+  userSubscriptions(
+    @Param('id') budgetUserId: string,
+    @Query('from_date') fromDate: string | undefined,
+    @Query('to_date') toDate: string | undefined,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.listSubscriptionsForCurrentUser(user.id, budgetUserId, parseSubscriptionDateRangeQuery(fromDate, toDate))
+  }
+
+  @Get('user/:id/budget/:budgetId/transactions')
+  userTransactions(
+    @Param('id') budgetUserId: string,
+    @Param('budgetId') budgetId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    if (!budgetId) {
+      throw new BadRequestException('Budget id is required')
+    }
+
+    return this.householdService.listBudgetTransactionsForCurrentUser(user.id, budgetUserId, budgetId)
+  }
+
+  @Post('user/:id/budget/:budgetId/transactions')
+  createSubscriptionTransaction(
+    @Param('id') budgetUserId: string,
+    @Param('budgetId') budgetId: string,
+    @Body() input: CreateSubscriptionTransactionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    if (!budgetId) {
+      throw new BadRequestException('Budget id is required')
+    }
+
+    return this.householdService.createSubscriptionTransactionForCurrentUser(user.id, budgetUserId, budgetId, input)
+  }
+
+  @Delete('user/:id/budget/:budgetId/transactions/:transactionId')
+  deleteSubscriptionTransaction(
+    @Param('id') budgetUserId: string,
+    @Param('budgetId') budgetId: string,
+    @Param('transactionId') transactionId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    if (!budgetId) {
+      throw new BadRequestException('Budget id is required')
+    }
+
+    if (!transactionId) {
+      throw new BadRequestException('Transaction id is required')
+    }
+
+    return this.householdService.deleteSubscriptionTransactionForCurrentUser(user.id, budgetUserId, budgetId, transactionId)
   }
 
   @Post('user/:id/budget/:budgetId/income')
@@ -109,10 +167,21 @@ function parseBudgetMonthQuery(month: string | undefined, year: string | undefin
   }
 }
 
-function parseBudgetWeekStartDateQuery(startDate: string | undefined) {
-  if (!startDate || !/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
-    throw new BadRequestException('Budget period startDate must be in YYYY-MM-DD format')
+function parseSubscriptionDateRangeQuery(fromDate: string | undefined, toDate: string | undefined) {
+  if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+    throw new BadRequestException('from_date must be in YYYY-MM-DD format')
   }
 
-  return startDate
+  if (!toDate || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
+    throw new BadRequestException('to_date must be in YYYY-MM-DD format')
+  }
+
+  if (toDate < fromDate) {
+    throw new BadRequestException('to_date must be on or after from_date')
+  }
+
+  return {
+    fromDate,
+    toDate
+  }
 }

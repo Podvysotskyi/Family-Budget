@@ -4,6 +4,8 @@ import type { Repository } from 'typeorm'
 import { BudgetCategoryEntity } from './entities/budget-category.entity'
 
 export type BudgetCategoryReorderDirection = 'up' | 'down'
+export type BudgetCategoryUpdateResult = BudgetCategoryEntity | 'not-found' | 'protected'
+export type BudgetCategoryDeleteResult = 'deleted' | 'not-found' | 'protected'
 
 @Injectable()
 export class BudgetCategoriesRepository {
@@ -29,11 +31,12 @@ export class BudgetCategoriesRepository {
     return this.budgetCategoriesRepository.save(this.budgetCategoriesRepository.create({
       householdId,
       name,
+      type: null,
       order
     }))
   }
 
-  async updateName(householdId: string, categoryId: string, name: string) {
+  async updateName(householdId: string, categoryId: string, name: string): Promise<BudgetCategoryUpdateResult> {
     const category = await this.budgetCategoriesRepository.findOne({
       where: {
         id: categoryId,
@@ -42,7 +45,11 @@ export class BudgetCategoriesRepository {
     })
 
     if (!category) {
-      return null
+      return 'not-found'
+    }
+
+    if (category.type !== null) {
+      return 'protected'
     }
 
     this.budgetCategoriesRepository.merge(category, { name })
@@ -84,7 +91,7 @@ export class BudgetCategoriesRepository {
     return this.budgetCategoriesRepository.findOneByOrFail({ id: category.id })
   }
 
-  async delete(householdId: string, categoryId: string) {
+  async delete(householdId: string, categoryId: string): Promise<BudgetCategoryDeleteResult> {
     const category = await this.budgetCategoriesRepository.findOne({
       where: {
         id: categoryId,
@@ -93,7 +100,11 @@ export class BudgetCategoriesRepository {
     })
 
     if (!category) {
-      return false
+      return 'not-found'
+    }
+
+    if (category.type !== null) {
+      return 'protected'
     }
 
     await this.budgetCategoriesRepository.manager.transaction(async (manager) => {
@@ -114,7 +125,7 @@ export class BudgetCategoriesRepository {
         .execute()
     })
 
-    return true
+    return 'deleted'
   }
 
   private async getNextOrder(householdId: string) {

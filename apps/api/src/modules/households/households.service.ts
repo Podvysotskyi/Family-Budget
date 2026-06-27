@@ -12,6 +12,7 @@ import { IncomeRepository } from '../income/income.repository'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
 import type { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { IncomeTypesRepository } from '../income-types/income-types.repository'
+import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
 import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
 import { SubscriptionType } from '../subscriptions/entities/subscription-type'
@@ -23,6 +24,11 @@ import { HouseholdsRepository } from './households.repository'
 export interface BudgetMonthSelection {
   month: number
   year: number
+}
+
+export interface DateRangeSelection {
+  fromDate: string
+  toDate: string
 }
 
 const householdBudgetUserId = 'household'
@@ -103,31 +109,6 @@ export class HouseholdService {
     return toBudgetPeriodList(budgets)
   }
 
-  async getUserBudgetWeekPeriodForCurrentUser(
-    currentUserId: string,
-    budgetUserId: string,
-    budgetMonth: BudgetMonthSelection,
-    startDate: string
-  ) {
-    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
-
-    if (!household) {
-      throw new NotFoundException('Household not found')
-    }
-
-    const budgetHouseholdId = await this.getBudgetHouseholdId(household.householdId, currentUserId, budgetUserId)
-    const budgets = await this.listBudgetPeriodEntitiesForMonth(budgetHouseholdId, budgetMonth)
-    const selectedBudget = budgets.find(budget => budget.type === BudgetType.Week && budget.startDate === startDate)
-
-    if (!selectedBudget) {
-      throw new NotFoundException('Budget period not found')
-    }
-
-    return {
-      budget: toBudgetPeriod(selectedBudget)
-    }
-  }
-
   async listBudgetCategories(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const categories = await this.budgetCategoriesRepository.listByHouseholdId(householdId)
@@ -179,6 +160,158 @@ export class HouseholdService {
     }
   }
 
+  async listSubscriptionsForCurrentUser(currentUserId: string, budgetUserId: string, dateRange: DateRangeSelection) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+
+      return {
+        subscriptions: (await this.subscriptionsRepository.listByHouseholdIdAndDateRange(
+          household.householdId,
+          dateRange.fromDate,
+          dateRange.toDate
+        ))
+          .flatMap(subscription => toBudgetSubscriptions(subscription, dateRange.fromDate, dateRange.toDate))
+          .sort(sortBudgetSubscriptions)
+      }
+    }
+
+    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+
+    return {
+      subscriptions: (await this.subscriptionsRepository.listByUserIdAndDateRange(
+        budgetUser.userId,
+        dateRange.fromDate,
+        dateRange.toDate
+      ))
+        .flatMap(subscription => toBudgetSubscriptions(subscription, dateRange.fromDate, dateRange.toDate))
+        .sort(sortBudgetSubscriptions)
+    }
+  }
+
+  async listBudgetTransactionsForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
+
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+
+      return {
+        subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByBudgetId(budget.id)).map(toSubscriptionTransaction)
+      }
+    }
+
+    const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+
+    return {
+      subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByBudgetId(budget.id, budgetUser.userId)).map(toSubscriptionTransaction)
+    }
+  }
+
+  async createSubscriptionTransactionForCurrentUser(
+    currentUserId: string,
+    budgetUserId: string,
+    budgetId: string,
+    input: CreateSubscriptionTransactionDto
+  ) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
+    const subscriptionId = getSubscriptionTransactionSubscriptionId(input)
+    const subscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, household.householdId)
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+    } else {
+      const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+
+      if (subscription.userId !== budgetUser.userId) {
+        throw new NotFoundException('Subscription not found')
+      }
+    }
+
+    const occurrenceDate = getSubscriptionTransactionOccurrenceDate(input)
+
+    if (occurrenceDate < budget.startDate || occurrenceDate > budget.endDate) {
+      throw new BadRequestException('Subscription occurrence date must be inside the selected budget period')
+    }
+
+    const expectedOccurrenceDate = getSubscriptionOccurrenceDate(subscription, budget.startDate, budget.endDate)
+
+    if (expectedOccurrenceDate !== occurrenceDate) {
+      throw new BadRequestException('Subscription occurrence date does not match this budget period')
+    }
+
+    const occurrenceDateParts = parseDateParts(occurrenceDate)
+    await this.budgetsRepository.ensureBudgets(buildBudgetInputsForMonth([household.householdId], occurrenceDateParts.year, occurrenceDateParts.month))
+
+    const occurrenceBudgets = await this.budgetsRepository.listByHouseholdIdAndDate(household.householdId, occurrenceDate)
+    const monthBudget = occurrenceBudgets.find(item => item.type === BudgetType.Month)
+    const weekBudget = occurrenceBudgets.find(item => item.type === BudgetType.Week)
+
+    if (!monthBudget || !weekBudget) {
+      throw new NotFoundException('Budget periods for subscription occurrence date were not found')
+    }
+
+    const subscriptionTransaction = await this.subscriptionsRepository.createSubscriptionTransaction({
+      amount: subscription.amount,
+      budgetIds: [monthBudget.id, weekBudget.id],
+      subscriptionId: subscription.id,
+      userId: currentUserId
+    })
+
+    return {
+      subscription_transactions: [toSubscriptionTransaction(subscriptionTransaction)]
+    }
+  }
+
+  async deleteSubscriptionTransactionForCurrentUser(
+    currentUserId: string,
+    budgetUserId: string,
+    budgetId: string,
+    transactionId: string
+  ) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
+    const transactionUserId = await this.getBudgetTransactionUserId(household.householdId, currentUserId, budgetUserId)
+    const deleted = await this.subscriptionsRepository.deleteSubscriptionTransactionByBudgetId(
+      transactionId,
+      budget.id,
+      transactionUserId
+    )
+
+    if (!deleted) {
+      throw new NotFoundException('Subscription transaction not found')
+    }
+
+    return {
+      deleted: true
+    }
+  }
+
   async createIncomeForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string, input: SaveIncomeDto) {
     const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
 
@@ -218,14 +351,18 @@ export class HouseholdService {
   async updateBudgetCategory(householdId: string, userId: string, categoryId: string, input: SaveBudgetCategoryDto) {
     await this.requireHouseholdUser(householdId, userId)
     const name = getBudgetCategoryName(input)
-    const category = await this.budgetCategoriesRepository.updateName(householdId, categoryId, name)
+    const result = await this.budgetCategoriesRepository.updateName(householdId, categoryId, name)
 
-    if (!category) {
+    if (result === 'not-found') {
       throw new NotFoundException('Budget category not found')
     }
 
+    if (result === 'protected') {
+      throw new BadRequestException('Default budget categories cannot be updated')
+    }
+
     return {
-      category: toBudgetCategory(category)
+      category: toBudgetCategory(result)
     }
   }
 
@@ -244,10 +381,14 @@ export class HouseholdService {
 
   async deleteBudgetCategory(householdId: string, userId: string, categoryId: string) {
     await this.requireHouseholdUser(householdId, userId)
-    const deleted = await this.budgetCategoriesRepository.delete(householdId, categoryId)
+    const result = await this.budgetCategoriesRepository.delete(householdId, categoryId)
 
-    if (!deleted) {
+    if (result === 'not-found') {
       throw new NotFoundException('Budget category not found')
+    }
+
+    if (result === 'protected') {
+      throw new BadRequestException('Default budget categories cannot be deleted')
     }
 
     return {
@@ -418,6 +559,18 @@ export class HouseholdService {
     return budgetUser.householdId
   }
 
+  private async getBudgetTransactionUserId(householdId: string, currentUserId: string, budgetUserId: string) {
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(householdId, currentUserId)
+
+      return undefined
+    }
+
+    const budgetUser = await this.requireBudgetUser(householdId, currentUserId, budgetUserId)
+
+    return budgetUser.userId
+  }
+
   private async getSubscriptionUserId(householdId: string, input: SaveSubscriptionDto) {
     const members = await this.usersRepository.listByHouseholdId(householdId)
 
@@ -476,6 +629,7 @@ function toBudgetCategory(category: BudgetCategoryEntity) {
     id: category.id,
     householdId: category.householdId,
     name: category.name,
+    type: category.type,
     order: category.order,
     createdAt: category.createdAt,
     updatedAt: category.updatedAt
@@ -574,6 +728,119 @@ function toSubscription(subscription: SubscriptionEntity) {
     amount: subscription.amount,
     createdAt: subscription.createdAt,
     updatedAt: subscription.updatedAt
+  }
+}
+
+function toBudgetSubscriptions(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
+  return getSubscriptionOccurrenceDates(subscription, budgetStartDate, budgetEndDate).map(occurrenceDate => ({
+    id: subscription.id,
+    name: subscription.name,
+    amount: subscription.amount,
+    userId: subscription.userId,
+    occurrenceDate
+  }))
+}
+
+function sortBudgetSubscriptions(first: ReturnType<typeof toBudgetSubscriptions>[number], second: ReturnType<typeof toBudgetSubscriptions>[number]) {
+  return first.occurrenceDate.localeCompare(second.occurrenceDate)
+    || first.name.localeCompare(second.name)
+    || first.id.localeCompare(second.id)
+}
+
+function getSubscriptionOccurrenceDate(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
+  return getSubscriptionOccurrenceDates(subscription, budgetStartDate, budgetEndDate)[0] || null
+}
+
+function getSubscriptionOccurrenceDates(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
+  const occurrenceDates: string[] = []
+
+  for (const date of listDateRange(budgetStartDate, budgetEndDate)) {
+    if (date < subscription.startDate) {
+      continue
+    }
+
+    if (subscription.endDate && date > subscription.endDate) {
+      continue
+    }
+
+    if (isSubscriptionOccurrenceDate(subscription, date)) {
+      occurrenceDates.push(date)
+    }
+  }
+
+  return occurrenceDates
+}
+
+function isSubscriptionOccurrenceDate(subscription: SubscriptionEntity, date: string) {
+  const startDateParts = parseDateParts(subscription.startDate)
+  const dateParts = parseDateParts(date)
+
+  if (subscription.type === SubscriptionType.Monthly) {
+    return dateParts.day === startDateParts.day
+  }
+
+  return dateParts.month === startDateParts.month && dateParts.day === startDateParts.day
+}
+
+function listDateRange(startDate: string, endDate: string) {
+  const dates: string[] = []
+  const current = parseUtcDate(startDate)
+  const end = parseUtcDate(endDate)
+
+  while (current <= end) {
+    dates.push(formatUtcDate(current))
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return dates
+}
+
+function parseDateParts(date: string) {
+  const [year, month, day] = date.split('-').map(Number)
+
+  return {
+    year,
+    month,
+    day
+  }
+}
+
+function parseUtcDate(date: string) {
+  const parts = parseDateParts(date)
+
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day))
+}
+
+function formatUtcDate(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function getSubscriptionTransactionSubscriptionId(input: CreateSubscriptionTransactionDto) {
+  const subscriptionId = typeof input?.subscriptionId === 'string' ? input.subscriptionId.trim() : ''
+
+  if (!subscriptionId) {
+    throw new BadRequestException('Subscription id is required')
+  }
+
+  return subscriptionId
+}
+
+function getSubscriptionTransactionOccurrenceDate(input: CreateSubscriptionTransactionDto) {
+  const occurrenceDate = typeof input?.occurrenceDate === 'string' ? input.occurrenceDate : ''
+
+  if (!isDateString(occurrenceDate)) {
+    throw new BadRequestException('Subscription occurrence date must be in YYYY-MM-DD format')
+  }
+
+  return occurrenceDate
+}
+
+function toSubscriptionTransaction(subscriptionTransaction: { id: string, amount: number, subscriptionId: string, userId: string }) {
+  return {
+    id: subscriptionTransaction.id,
+    subscriptionId: subscriptionTransaction.subscriptionId,
+    userId: subscriptionTransaction.userId,
+    amount: subscriptionTransaction.amount
   }
 }
 

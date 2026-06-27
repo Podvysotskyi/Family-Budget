@@ -5,11 +5,13 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm'
 import { HouseholdEntity } from '../../households/entities/household.entity'
 import { UserEntity } from '../../users/entities/user.entity'
+import { SubscriptionTransactionEntity } from './subscription-transaction.entity'
 import { SubscriptionType } from './subscription-type'
 
 const amountTransformer = {
@@ -20,8 +22,6 @@ const amountTransformer = {
 @Entity({ name: 'subscriptions' })
 @Index('subscriptions_household_id_idx', ['householdId'])
 @Index('subscriptions_user_id_idx', ['userId'])
-@Index('subscriptions_household_name_user_unique', ['householdId', 'name', 'userId'], { unique: true, where: '"user_id" IS NOT NULL' })
-@Index('subscriptions_household_name_unassigned_unique', ['householdId', 'name'], { unique: true, where: '"user_id" IS NULL' })
 export class SubscriptionEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string
@@ -60,4 +60,7 @@ export class SubscriptionEntity {
   @ManyToOne(() => UserEntity, user => user.subscriptions, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity | null
+
+  @OneToMany(() => SubscriptionTransactionEntity, subscriptionTransaction => subscriptionTransaction.subscription)
+  transactions!: SubscriptionTransactionEntity[]
 }

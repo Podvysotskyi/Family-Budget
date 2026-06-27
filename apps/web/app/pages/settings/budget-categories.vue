@@ -70,6 +70,12 @@ async function createBudgetCategory() {
 
 function startEditingBudgetCategory(category: BudgetCategory) {
   budgetCategoryError.value = null
+
+  if (category.type !== null) {
+    budgetCategoryError.value = 'Default budget categories cannot be updated.'
+    return
+  }
+
   editingBudgetCategoryId.value = category.id
   editingBudgetCategoryName.value = category.name
 }
@@ -81,6 +87,12 @@ function cancelEditingBudgetCategory() {
 
 function startDeletingBudgetCategory(category: BudgetCategory) {
   budgetCategoryError.value = null
+
+  if (category.type !== null) {
+    budgetCategoryError.value = 'Default budget categories cannot be deleted.'
+    return
+  }
+
   budgetCategoryPendingDelete.value = category
 }
 
@@ -276,9 +288,6 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
             class="flex items-center justify-between gap-3"
           >
             <div class="flex min-w-0 items-center gap-3">
-              <span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted">
-                {{ category.order }}
-              </span>
               <p class="truncate text-sm font-medium text-highlighted">
                 {{ category.name }}
               </p>
@@ -301,6 +310,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 @click="reorderBudgetCategory(category, 'down')"
               />
               <UButton
+                v-if="category.type === null"
                 icon="i-lucide-pencil"
                 color="neutral"
                 variant="ghost"
@@ -309,6 +319,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 @click="startEditingBudgetCategory(category)"
               />
               <UButton
+                v-if="category.type === null"
                 icon="i-lucide-trash-2"
                 color="error"
                 variant="ghost"

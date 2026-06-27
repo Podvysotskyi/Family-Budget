@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BudgetPeriod } from '~/stores/budgets'
+import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment } from '~/stores/budgets'
 
 defineOptions({
   name: 'BudgetWorkspace'
@@ -49,6 +49,8 @@ const isLoadingIncomeTypes = ref(false)
 const incomeTypesLoadError = ref('')
 const isSavingIncome = ref(false)
 const periodLoadError = ref('')
+const subscriptionActionError = ref('')
+const payingSubscriptionKey = ref<string | null>(null)
 const selectedBudgetRequestKey = ref<string | null>(null)
 const selectedBudgetRequestPending = ref(false)
 const error = computed(() => budgetStore.getMonthBudgetError(budgetUserId.value, selectedMonth.value, selectedYear.value))
@@ -60,9 +62,63 @@ const selectedBudget = computed(() => {
 })
 const incomeTypes = computed(() => incomeTypesStore.getIncomeTypes(householdId.value))
 const monthlyBudget = computed(() => budgetStore.getMonthBudget(budgetUserId.value, selectedMonth.value, selectedYear.value))
+const visibleCalendarStartDate = computed(() => {
+  const monthStart = new Date(Date.UTC(selectedYear.value, selectedMonth.value - 1, 1))
+
+  return formatDateKey(addDays(monthStart, -getDaysSinceMonday(monthStart)))
+})
+const visibleCalendarEndDate = computed(() => {
+  const monthEnd = new Date(Date.UTC(selectedYear.value, selectedMonth.value, 0))
+
+  return formatDateKey(addDays(monthEnd, 6 - getDaysSinceMonday(monthEnd)))
+})
 const incomeEntries = computed(() => selectedBudget.value ? budgetStore.getIncomeEntries(selectedBudget.value.id) : [])
+const budgetSubscriptions = computed(() => budgetStore.getUserSubscriptions(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
+const budgetSubscriptionTransactions = computed(() => selectedBudget.value ? budgetStore.getBudgetSubscriptionTransactions(selectedBudget.value.id) : [])
+const budgetSubscriptionsError = computed(() => {
+  return subscriptionActionError.value
+    || budgetStore.getUserSubscriptionsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || (selectedBudget.value ? budgetStore.getBudgetSubscriptionTransactionsError(selectedBudget.value.id) : null)
+})
+const isLoadingBudgetSubscriptions = computed(() => {
+  return budgetStore.isUserSubscriptionsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || (selectedBudget.value ? budgetStore.isBudgetSubscriptionTransactionsLoading(selectedBudget.value.id) : false)
+})
 const monthlyIncomeTotal = computed(() => {
   return incomeEntries.value.reduce((total, income) => total + income.amount, 0)
+})
+const paidSubscriptionTransactionsBySubscriptionId = computed(() => {
+  return new Map(budgetSubscriptionTransactions.value.map(transaction => [transaction.subscriptionId, transaction]))
+})
+const selectedPeriodSubscriptions = computed(() => {
+  if (!selectedBudget.value) {
+    return []
+  }
+
+  return budgetSubscriptions.value.filter((subscription) => {
+    return subscription.occurrenceDate >= selectedBudget.value!.startDate && subscription.occurrenceDate <= selectedBudget.value!.endDate
+  })
+})
+const budgetSubscriptionPayments = computed<BudgetSubscriptionPayment[]>(() => {
+  return selectedPeriodSubscriptions.value.map((subscription) => {
+    const transaction = paidSubscriptionTransactionsBySubscriptionId.value.get(subscription.id)
+
+    return {
+      ...subscription,
+      isPaid: Boolean(transaction),
+      transactionId: transaction?.id || null
+    }
+  })
+})
+const subscriptionTotalsByDate = computed(() => {
+  return budgetSubscriptions.value.reduce<Record<string, number>>((totals, subscription) => {
+    totals[subscription.occurrenceDate] = (totals[subscription.occurrenceDate] || 0) + subscription.amount
+
+    return totals
+  }, {})
+})
+const totalExpenses = computed(() => {
+  return budgetSubscriptionPayments.value.reduce((total, subscription) => total + subscription.amount, 0)
 })
 const summaryTitle = computed(() => {
   return selectedBudget.value?.type === 'week' ? 'Weekly summary' : 'Monthly summary'
@@ -83,7 +139,7 @@ const selectedBudgetLabel = computed(() => {
 })
 const monthlySummary = computed(() => {
   const income = monthlyIncomeTotal.value
-  const expenses = 0
+  const expenses = totalExpenses.value
 
   return [
     {
@@ -124,13 +180,21 @@ watch([budgetUserId, selectedMonth, selectedYear], async ([userId, month, year])
   await budgetStore.fetchMonthBudget(userId, month, year)
 })
 
-watch(() => selectedBudget.value?.id, async (budgetId) => {
-  if (budgetId) {
-    await budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId)
-  }
-}, { immediate: true })
-
 if (import.meta.client) {
+  watch(() => selectedBudget.value?.id, async (budgetId) => {
+    if (budgetId) {
+      subscriptionActionError.value = ''
+      await Promise.all([
+        budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId),
+        budgetStore.fetchBudgetSubscriptionTransactions(budgetUserId.value, budgetId)
+      ])
+    }
+  }, { immediate: true })
+
+  watch([budgetUserId, visibleCalendarStartDate, visibleCalendarEndDate], async ([userId, fromDate, toDate]) => {
+    await budgetStore.fetchUserSubscriptions(userId, fromDate, toDate)
+  }, { immediate: true })
+
   watch([selectedMonth, selectedYear], () => {
     const month = String(selectedMonth.value)
     const year = String(selectedYear.value)
@@ -194,6 +258,22 @@ function formatDate(value: string) {
     month: 'short',
     day: 'numeric'
   })
+}
+
+function formatDateKey(date: Date) {
+  return date.toISOString().slice(0, 10)
+}
+
+function addDays(date: Date, days: number) {
+  const nextDate = new Date(date)
+
+  nextDate.setUTCDate(nextDate.getUTCDate() + days)
+
+  return nextDate
+}
+
+function getDaysSinceMonday(date: Date) {
+  return (date.getUTCDay() + 6) % 7
 }
 
 function getCurrentBudgetMonth() {
@@ -340,8 +420,7 @@ async function selectBudgetPeriod(period: BudgetPeriod) {
       return
     }
 
-    const budget = await budgetStore.fetchWeekBudget(budgetUserId.value, selectedMonth.value, selectedYear.value, period.startDate)
-    selectedBudgetId.value = budget.id
+    selectedBudgetId.value = period.id
   } catch {
     periodLoadError.value = 'Budget period could not be loaded.'
   } finally {
@@ -352,6 +431,44 @@ async function selectBudgetPeriod(period: BudgetPeriod) {
 
 function getBudgetKey(period: Pick<BudgetPeriod, 'type' | 'startDate'>) {
   return `${period.type}:${period.startDate}`
+}
+
+async function markSubscriptionPaid(subscription: BudgetSubscriptionPayment) {
+  if (!selectedBudget.value || subscription.isPaid) {
+    return
+  }
+
+  subscriptionActionError.value = ''
+  payingSubscriptionKey.value = getSubscriptionKey(subscription)
+
+  try {
+    await budgetStore.markSubscriptionPaid(budgetUserId.value, selectedBudget.value.id, subscription)
+  } catch {
+    subscriptionActionError.value = 'Subscription could not be marked paid.'
+  } finally {
+    payingSubscriptionKey.value = null
+  }
+}
+
+async function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
+  if (!selectedBudget.value || !subscription.isPaid) {
+    return
+  }
+
+  subscriptionActionError.value = ''
+  payingSubscriptionKey.value = getSubscriptionKey(subscription)
+
+  try {
+    await budgetStore.markSubscriptionUnpaid(budgetUserId.value, selectedBudget.value.id, subscription)
+  } catch {
+    subscriptionActionError.value = 'Subscription could not be marked unpaid.'
+  } finally {
+    payingSubscriptionKey.value = null
+  }
+}
+
+function getSubscriptionKey(subscription: Pick<BudgetSubscription, 'id' | 'occurrenceDate'>) {
+  return `${subscription.id}:${subscription.occurrenceDate}`
 }
 </script>
 
@@ -449,6 +566,7 @@ function getBudgetKey(period: Pick<BudgetPeriod, 'type' | 'startDate'>) {
             <BudgetCalendar
               :period="selectedBudget"
               :month="selectedMonth"
+              :subscription-totals-by-date="subscriptionTotalsByDate"
               :year="selectedYear"
             />
           </div>
@@ -465,6 +583,12 @@ function getBudgetKey(period: Pick<BudgetPeriod, 'type' | 'startDate'>) {
       <BudgetCategoriesPanel
         v-if="householdId"
         :household-id="householdId"
+        :subscriptions="budgetSubscriptionPayments"
+        :subscriptions-error="budgetSubscriptionsError"
+        :is-loading-subscriptions="isLoadingBudgetSubscriptions"
+        :paying-subscription-key="payingSubscriptionKey"
+        @mark-subscription-paid="markSubscriptionPaid"
+        @mark-subscription-unpaid="markSubscriptionUnpaid"
       />
     </UContainer>
 

@@ -4,6 +4,8 @@ import { BudgetEntity } from '../budgets/entities/budget.entity'
 import { HouseholdEntity } from '../households/entities/household.entity'
 import { IncomeEntity } from '../income/entities/income.entity'
 import { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
+import { BudgetSubscriptionTransactionEntity } from '../subscriptions/entities/budget-subscription-transaction.entity'
+import { SubscriptionTransactionEntity } from '../subscriptions/entities/subscription-transaction.entity'
 import { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
 import { UserEntity } from '../users/entities/user.entity'
 import type { DatabaseConfigDto } from './dto/database-config.dto'
@@ -14,7 +16,9 @@ export const databaseEntities = [
   HouseholdEntity,
   IncomeEntity,
   IncomeTypeEntity,
+  BudgetSubscriptionTransactionEntity,
   SubscriptionEntity,
+  SubscriptionTransactionEntity,
   UserEntity
 ]
 

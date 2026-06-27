@@ -14,6 +14,7 @@ type BudgetPeriod = {
 type CalendarDay = {
   key: string
   dayOfMonth: number
+  listLabel: string
   monthLabel: string
   isOutsideMonth: boolean
   isSelectedPeriod: boolean
@@ -23,25 +24,37 @@ type CalendarDay = {
 const props = defineProps<{
   period: BudgetPeriod
   month: number
+  subscriptionTotalsByDate?: Record<string, number>
   year: number
 }>()
 
 const weekDayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const calendarDays = computed(() => {
-  if (props.period.type === 'week') {
-    return buildPeriodCalendarDays(props.period)
-  }
-
   return buildMonthCalendarDays(props.year, props.month, props.period)
+})
+const selectedPeriodDays = computed(() => {
+  return calendarDays.value.filter(day => day.isSelectedPeriod)
 })
 
 function getCalendarDayClass(day: CalendarDay) {
   return [
-    'min-h-14 rounded-md border p-2 text-left transition-colors sm:min-h-20',
+    'flex min-h-14 flex-col rounded-md border p-2 text-left transition-colors sm:min-h-20',
     day.isSelectedPeriod ? 'border-primary/40 bg-primary/10' : 'border-default bg-default',
     day.isOutsideMonth ? 'text-dimmed' : 'text-highlighted',
     day.isToday ? 'ring-2 ring-primary/50' : ''
   ]
+}
+
+function getSubscriptionTotal(dayKey: string) {
+  return props.subscriptionTotalsByDate?.[dayKey] || 0
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 2
+  }).format(value)
 }
 
 function buildMonthCalendarDays(year: number, month: number, selectedPeriod: BudgetPeriod) {
@@ -58,24 +71,18 @@ function buildMonthCalendarDays(year: number, month: number, selectedPeriod: Bud
   return days
 }
 
-function buildPeriodCalendarDays(selectedPeriod: BudgetPeriod) {
-  const periodStart = parseBudgetDate(selectedPeriod.startDate)
-  const periodEnd = parseBudgetDate(selectedPeriod.endDate)
-  const days: CalendarDay[] = []
-
-  for (let date = periodStart; date <= periodEnd; date = addDays(date, 1)) {
-    days.push(buildCalendarDay(date, selectedPeriod))
-  }
-
-  return days
-}
-
 function buildCalendarDay(date: Date, selectedPeriod: BudgetPeriod, selectedMonthNumber?: number): CalendarDay {
   const key = formatDateKey(date)
 
   return {
     key,
     dayOfMonth: date.getUTCDate(),
+    listLabel: date.toLocaleDateString(undefined, {
+      timeZone: 'UTC',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    }),
     monthLabel: date.toLocaleDateString(undefined, {
       timeZone: 'UTC',
       month: 'short'
@@ -88,10 +95,6 @@ function buildCalendarDay(date: Date, selectedPeriod: BudgetPeriod, selectedMont
 
 function getDaysSinceMonday(date: Date) {
   return (date.getUTCDay() + 6) % 7
-}
-
-function parseBudgetDate(value: string) {
-  return new Date(`${value}T00:00:00.000Z`)
 }
 
 function addDays(date: Date, days: number) {
@@ -108,7 +111,32 @@ function formatDateKey(date: Date) {
 </script>
 
 <template>
-  <div class="grid grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-muted">
+  <div class="space-y-2 sm:hidden">
+    <div
+      v-for="day in selectedPeriodDays"
+      :key="day.key"
+      class="flex min-h-12 items-center justify-between gap-3 rounded-md border border-primary/40 bg-primary/10 px-3 py-2"
+    >
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="truncate text-sm font-semibold text-highlighted">
+          {{ day.listLabel }}
+        </span>
+        <span
+          v-if="day.isToday"
+          aria-label="Today"
+          class="size-1.5 shrink-0 rounded-full bg-primary"
+        />
+      </div>
+      <p
+        v-if="getSubscriptionTotal(day.key) > 0"
+        class="shrink-0 text-sm font-semibold text-error"
+      >
+        {{ formatCurrency(getSubscriptionTotal(day.key)) }}
+      </p>
+    </div>
+  </div>
+
+  <div class="hidden grid-cols-7 gap-1 text-center text-xs font-medium uppercase text-muted sm:grid">
     <span
       v-for="dayLabel in weekDayLabels"
       :key="dayLabel"
@@ -117,7 +145,7 @@ function formatDateKey(date: Date) {
     </span>
   </div>
 
-  <div class="mt-2 grid grid-cols-7 gap-1">
+  <div class="mt-2 hidden grid-cols-7 gap-1 sm:grid">
     <div
       v-for="day in calendarDays"
       :key="day.key"
@@ -133,6 +161,12 @@ function formatDateKey(date: Date) {
           class="size-1.5 rounded-full bg-primary"
         />
       </div>
+      <p
+        v-if="getSubscriptionTotal(day.key) > 0"
+        class="mt-2 text-xs font-semibold text-error"
+      >
+        {{ formatCurrency(getSubscriptionTotal(day.key)) }}
+      </p>
     </div>
   </div>
 </template>

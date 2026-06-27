@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
 import { HouseholdEntity } from '../../households/entities/household.entity'
 import { IncomeEntity } from '../../income/entities/income.entity'
+import { SubscriptionTransactionEntity } from '../../subscriptions/entities/subscription-transaction.entity'
 import { SubscriptionEntity } from '../../subscriptions/entities/subscription.entity'
 
 @Entity({ name: 'users' })
@@ -41,4 +42,7 @@ export class UserEntity {
 
   @OneToMany(() => SubscriptionEntity, subscription => subscription.user)
   subscriptions!: SubscriptionEntity[]
+
+  @OneToMany(() => SubscriptionTransactionEntity, subscriptionTransaction => subscriptionTransaction.user)
+  subscriptionTransactions!: SubscriptionTransactionEntity[]
 }

@@ -23,6 +23,28 @@ function formatCurrency(value: number) {
     maximumFractionDigits: 2
   }).format(value)
 }
+
+function getValueClass(item: SummaryItem) {
+  if (item.key === 'income' && item.value > 0) {
+    return 'text-success'
+  }
+
+  if (item.key === 'expenses' && item.value > 0) {
+    return 'text-error'
+  }
+
+  if (item.key === 'balance') {
+    if (item.value > 0) {
+      return 'text-success'
+    }
+
+    if (item.value < 0) {
+      return 'text-error'
+    }
+  }
+
+  return 'text-highlighted'
+}
 </script>
 
 <template>
@@ -49,7 +71,10 @@ function formatCurrency(value: number) {
             {{ item.label }}
           </p>
         </div>
-        <p class="mt-2 text-lg font-semibold tracking-normal text-highlighted">
+        <p
+          class="mt-2 text-lg font-semibold tracking-normal"
+          :class="getValueClass(item)"
+        >
           {{ formatCurrency(item.value) }}
         </p>
       </section>

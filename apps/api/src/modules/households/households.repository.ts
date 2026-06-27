@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import type { Repository } from 'typeorm'
 import { BudgetCategoryEntity } from '../budget-categories/entities/budget-category.entity'
-import { defaultBudgetCategoryNames } from '../budget-categories/default-budget-categories'
+import { defaultBudgetCategories } from '../budget-categories/default-budget-categories'
 import { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { defaultIncomeTypeTexts } from '../income-types/default-income-types'
 import type { CreateHouseholdDto } from './dto/create-household.dto'
@@ -19,9 +19,10 @@ export class HouseholdsRepository {
     return this.householdsRepository.manager.transaction(async (manager) => {
       const household = await manager.save(HouseholdEntity, manager.create(HouseholdEntity, input))
 
-      await manager.save(BudgetCategoryEntity, defaultBudgetCategoryNames.map((name, index) => manager.create(BudgetCategoryEntity, {
+      await manager.save(BudgetCategoryEntity, defaultBudgetCategories.map((category, index) => manager.create(BudgetCategoryEntity, {
         householdId: household.id,
-        name,
+        name: category.name,
+        type: category.type,
         order: index + 1
       })))
 

@@ -73,6 +73,15 @@ export class BudgetsRepository {
     })
   }
 
+  listByHouseholdIdAndDate(householdId: string, date: string) {
+    return this.budgetsRepository
+      .createQueryBuilder('budget')
+      .where('budget.household_id = :householdId', { householdId })
+      .andWhere('budget.start_date <= :date', { date })
+      .andWhere('budget.end_date >= :date', { date })
+      .getMany()
+  }
+
   async syncActiveStates(referenceDate: string) {
     const result = await this.budgetsRepository.query<Array<{ id: string }>>(
       `
