@@ -3,7 +3,7 @@
 Nx-managed family budgeting app.
 
 - `apps/web`: Nuxt SSR frontend with Nuxt UI
-- `apps/api`: NestJS backend with TypeORM and PostgreSQL
+- `apps/api`: NestJS backend with TypeORM, PostgreSQL, and recurring budget scheduling
 
 ## Setup
 
@@ -32,18 +32,13 @@ Or run apps separately:
 ```bash
 pnpm dev:api
 pnpm dev:web
-pnpm dev:scheduling
 ```
 
 Frontend: `http://127.0.0.1:3000`
 Backend: `http://127.0.0.1:3001`
-Scheduling: background worker, no HTTP port
+Scheduling: runs inside the API process
 
-To run the scheduling worker in Docker:
-
-```bash
-docker compose --profile workers up scheduling
-```
+Scheduling is enabled by default. Set `SCHEDULING_ENABLED=false` to disable it locally, or set `SCHEDULING_TIMEZONE` to override the default `America/Chicago` scheduling timezone.
 
 ## Checks
 

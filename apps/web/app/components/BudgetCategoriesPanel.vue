@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { BudgetSubscriptionPayment } from '~/stores/budgets'
+import type { BudgetCategory } from '~/stores/budget-categories'
 
 defineOptions({
   name: 'BudgetCategoriesPanel'
@@ -21,45 +22,33 @@ const budgetCategoriesStore = useBudgetCategoriesStore()
 await budgetCategoriesStore.fetchCategories(props.householdId)
 
 const error = computed(() => budgetCategoriesStore.getError(props.householdId))
+const isLoadingBudgetCategories = computed(() => budgetCategoriesStore.isLoading(props.householdId))
 const budgetCategories = computed(() => budgetCategoriesStore.getCategories(props.householdId))
-const subscriptions = computed(() => props.subscriptions || [])
-const subscriptionsPaidTotal = computed(() => subscriptions.value.reduce((total, subscription) => {
-  return subscription.isPaid ? total + subscription.amount : total
-}, 0))
-const subscriptionsTotal = computed(() => subscriptions.value.reduce((total, subscription) => total + subscription.amount, 0))
-const hasSubscriptionPayments = computed(() => subscriptionsPaidTotal.value > 0)
-const areSubscriptionsFullyPaid = computed(() => subscriptionsTotal.value > 0 && subscriptionsPaidTotal.value >= subscriptionsTotal.value)
+const leftBudgetCategories = computed(() => budgetCategories.value.filter((_, index) => index % 2 === 0))
+const rightBudgetCategories = computed(() => budgetCategories.value.filter((_, index) => index % 2 === 1))
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2
-  }).format(value)
-}
-
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString(undefined, {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-function getSubscriptionKey(subscription: BudgetSubscriptionPayment) {
-  return `${subscription.id}:${subscription.occurrenceDate}`
-}
-
-function setSubscriptionPaid(subscription: BudgetSubscriptionPayment, value: boolean) {
-  if (value === subscription.isPaid) {
-    return
+function getCategoryComponent(category: BudgetCategory) {
+  switch (category.type) {
+    case 'subscriptions':
+      return resolveComponent('BudgetCategorySubscriptionsCard')
+    case 'bills':
+      return resolveComponent('BudgetCategoryBillsCard')
+    case 'credit_cards':
+      return resolveComponent('BudgetCategoryCreditCardsCard')
+    case 'goals':
+      return resolveComponent('BudgetCategoryGoalsCard')
+    case 'other':
+      return resolveComponent('BudgetCategoryOtherCard')
+    default:
+      return resolveComponent('BudgetCategoryCustomCard')
   }
+}
 
-  if (value) {
-    emit('markSubscriptionPaid', subscription)
-    return
-  }
+function markSubscriptionPaid(subscription: BudgetSubscriptionPayment) {
+  emit('markSubscriptionPaid', subscription)
+}
 
+function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
   emit('markSubscriptionUnpaid', subscription)
 }
 </script>
@@ -83,110 +72,79 @@ function setSubscriptionPaid(subscription: BudgetSubscriptionPayment, value: boo
       />
 
       <div
-        v-else-if="budgetCategories.length"
+        v-else-if="isLoadingBudgetCategories && !budgetCategories.length"
         class="grid gap-4 md:grid-cols-2"
       >
-        <UCard
-          v-for="category in budgetCategories"
-          :key="category.id"
-          :ui="{ header: 'p-5 sm:px-5', body: 'p-0 sm:p-0' }"
+        <div
+          v-for="index in 4"
+          :key="index"
         >
-          <template #header>
-            <div class="flex items-start justify-between gap-3">
-              <h3 class="truncate text-sm font-semibold text-highlighted">
-                {{ category.name }}
-              </h3>
-              <div
-                v-if="category.type === 'subscriptions'"
-                class="flex shrink-0 items-center gap-1 text-sm font-semibold"
-              >
-                <span
-                  v-if="areSubscriptionsFullyPaid"
-                  class="text-success"
-                >
-                  {{ formatCurrency(subscriptionsPaidTotal) }}
-                </span>
-                <template v-else-if="hasSubscriptionPayments">
-                  <span class="text-success">
-                    {{ formatCurrency(subscriptionsPaidTotal) }}
-                  </span>
-                  <span class="text-muted">/</span>
-                  <span class="text-error">
-                    {{ formatCurrency(subscriptionsTotal) }}
-                  </span>
-                </template>
-                <span
-                  v-else
-                  class="text-error"
-                >
-                  {{ formatCurrency(subscriptionsTotal) }}
-                </span>
+          <UCard :ui="{ header: 'p-5 sm:px-5', body: 'p-4 sm:p-4' }">
+            <template #header>
+              <div class="flex items-center justify-between gap-3">
+                <USkeleton class="h-5 w-36" />
+                <USkeleton class="h-5 w-20" />
               </div>
-            </div>
-          </template>
+            </template>
 
-          <div v-if="category.type === 'subscriptions'">
-            <div
-              v-if="isLoadingSubscriptions && !subscriptions.length"
-              class="space-y-2"
-            >
-              <USkeleton class="h-10 w-full" />
-              <USkeleton class="h-10 w-full" />
+            <div class="space-y-3">
+              <USkeleton class="h-4 w-32" />
+              <USkeleton class="h-4 w-44" />
             </div>
+          </UCard>
+        </div>
+      </div>
 
-            <UAlert
-              v-else-if="subscriptionsError"
-              color="error"
-              variant="subtle"
-              icon="i-lucide-database"
-              title="Subscriptions are unavailable"
-              :description="subscriptionsError"
+      <div
+        v-else-if="budgetCategories.length"
+        class="space-y-0"
+      >
+        <div class="md:hidden">
+          <component
+            :is="getCategoryComponent(category)"
+            v-for="category in budgetCategories"
+            :key="category.id"
+            :category="category"
+            :subscriptions="subscriptions"
+            :subscriptions-error="subscriptionsError"
+            :is-loading-subscriptions="isLoadingSubscriptions"
+            :paying-subscription-key="payingSubscriptionKey"
+            @mark-subscription-paid="markSubscriptionPaid"
+            @mark-subscription-unpaid="markSubscriptionUnpaid"
+          />
+        </div>
+
+        <div class="hidden gap-4 md:grid md:grid-cols-2">
+          <div>
+            <component
+              :is="getCategoryComponent(category)"
+              v-for="category in leftBudgetCategories"
+              :key="category.id"
+              :category="category"
+              :subscriptions="subscriptions"
+              :subscriptions-error="subscriptionsError"
+              :is-loading-subscriptions="isLoadingSubscriptions"
+              :paying-subscription-key="payingSubscriptionKey"
+              @mark-subscription-paid="markSubscriptionPaid"
+              @mark-subscription-unpaid="markSubscriptionUnpaid"
             />
-
-            <div
-              v-else-if="subscriptions.length"
-              class="divide-y divide-default"
-            >
-              <div
-                v-for="subscription in subscriptions"
-                :key="getSubscriptionKey(subscription)"
-                class="flex items-center justify-between gap-3 px-3 py-2"
-              >
-                <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-highlighted">
-                    {{ subscription.name }}
-                  </p>
-                  <p class="mt-0.5 text-xs text-muted">
-                    {{ formatDate(subscription.occurrenceDate) }}
-                  </p>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <p class="text-sm font-semibold text-highlighted">
-                    {{ formatCurrency(subscription.amount) }}
-                  </p>
-                  <USwitch
-                    :model-value="subscription.isPaid"
-                    :disabled="payingSubscriptionKey === getSubscriptionKey(subscription)"
-                    :aria-label="subscription.isPaid ? 'Mark as unpaid' : 'Mark as paid'"
-                    @update:model-value="value => setSubscriptionPaid(subscription, value)"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div v-else class="px-4 py-2">
-              <p class="text-sm text-muted ma-4">
-                No subscriptions for this period.
-              </p>
-            </div>
           </div>
 
-          <div v-else class="px-4 py-2">
-            <p class="text-sm text-muted">
-              No budget items yet.
-            </p>
+          <div>
+            <component
+              :is="getCategoryComponent(category)"
+              v-for="category in rightBudgetCategories"
+              :key="category.id"
+              :category="category"
+              :subscriptions="subscriptions"
+              :subscriptions-error="subscriptionsError"
+              :is-loading-subscriptions="isLoadingSubscriptions"
+              :paying-subscription-key="payingSubscriptionKey"
+              @mark-subscription-paid="markSubscriptionPaid"
+              @mark-subscription-unpaid="markSubscriptionUnpaid"
+            />
           </div>
-        </UCard>
+        </div>
       </div>
 
       <div

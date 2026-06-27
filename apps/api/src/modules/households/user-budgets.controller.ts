@@ -61,13 +61,15 @@ export class UserBudgetsController {
       throw new BadRequestException('User id is required')
     }
 
-    return this.householdService.listSubscriptionsForCurrentUser(user.id, budgetUserId, parseSubscriptionDateRangeQuery(fromDate, toDate))
+    return this.householdService.listSubscriptionsForCurrentUser(user.id, budgetUserId, parseDateRangeQuery(fromDate, toDate))
   }
 
   @Get('user/:id/budget/:budgetId/transactions')
   userTransactions(
     @Param('id') budgetUserId: string,
     @Param('budgetId') budgetId: string,
+    @Query('from_date') fromDate: string | undefined,
+    @Query('to_date') toDate: string | undefined,
     @Req() request: AuthenticatedRequest
   ) {
     const user = requireRequestUser(request)
@@ -80,7 +82,12 @@ export class UserBudgetsController {
       throw new BadRequestException('Budget id is required')
     }
 
-    return this.householdService.listBudgetTransactionsForCurrentUser(user.id, budgetUserId, budgetId)
+    return this.householdService.listBudgetTransactionsForCurrentUser(
+      user.id,
+      budgetUserId,
+      budgetId,
+      parseDateRangeQuery(fromDate, toDate)
+    )
   }
 
   @Post('user/:id/budget/:budgetId/transactions')
@@ -167,7 +174,7 @@ function parseBudgetMonthQuery(month: string | undefined, year: string | undefin
   }
 }
 
-function parseSubscriptionDateRangeQuery(fromDate: string | undefined, toDate: string | undefined) {
+function parseDateRangeQuery(fromDate: string | undefined, toDate: string | undefined) {
   if (!fromDate || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
     throw new BadRequestException('from_date must be in YYYY-MM-DD format')
   }

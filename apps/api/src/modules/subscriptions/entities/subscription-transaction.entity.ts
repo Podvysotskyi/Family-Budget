@@ -1,6 +1,5 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
 import { UserEntity } from '../../users/entities/user.entity'
-import { BudgetSubscriptionTransactionEntity } from './budget-subscription-transaction.entity'
 import { SubscriptionEntity } from './subscription.entity'
 
 const amountTransformer = {
@@ -11,6 +10,7 @@ const amountTransformer = {
 @Entity({ name: 'subscription_transactions' })
 @Index('subscription_transactions_subscription_id_idx', ['subscriptionId'])
 @Index('subscription_transactions_user_id_idx', ['userId'])
+@Index('subscription_transactions_subscription_date_unique', ['subscriptionId', 'date'], { unique: true })
 export class SubscriptionTransactionEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string
@@ -23,6 +23,9 @@ export class SubscriptionTransactionEntity {
 
   @Column({ type: 'numeric', precision: 12, scale: 2, transformer: amountTransformer })
   amount!: number
+
+  @Column({ type: 'date' })
+  date!: string
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date
@@ -37,7 +40,4 @@ export class SubscriptionTransactionEntity {
   @ManyToOne(() => UserEntity, user => user.subscriptionTransactions, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'user_id' })
   user!: UserEntity
-
-  @OneToMany(() => BudgetSubscriptionTransactionEntity, budgetSubscriptionTransaction => budgetSubscriptionTransaction.subscriptionTransaction)
-  budgetTransactions!: BudgetSubscriptionTransactionEntity[]
 }

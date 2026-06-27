@@ -1,13 +1,13 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { DataSource } from 'typeorm'
-import { BudgetsRepository } from '../../../../api/src/modules/budgets/budgets.repository'
-import { BudgetType } from '../../../../api/src/modules/budgets/entities/budget-type'
-import { HouseholdsRepository } from '../../../../api/src/modules/households/households.repository'
-import type { SubscriptionEntity } from '../../../../api/src/modules/subscriptions/entities/subscription.entity'
-import { SubscriptionsRepository } from '../../../../api/src/modules/subscriptions/subscriptions.repository'
-import { UsersRepository } from '../../../../api/src/modules/users/users.repository'
-import { buildBudgetInputsAroundCurrentMonth, buildBudgetInputsForMonth } from './budget-windows'
+import { buildBudgetInputsAroundCurrentMonth, buildBudgetInputsForMonth } from '../budgets/budget-windows'
+import { BudgetsRepository } from '../budgets/budgets.repository'
+import { BudgetType } from '../budgets/entities/budget-type'
+import { HouseholdsRepository } from '../households/households.repository'
+import type { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
+import { SubscriptionsRepository } from '../subscriptions/subscriptions.repository'
+import { UsersRepository } from '../users/users.repository'
 
 const advisoryLockId = 42_202_601
 
@@ -131,7 +131,7 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
 
     await this.subscriptionsRepository.createSubscriptionTransaction({
       amount: subscription.amount,
-      budgetIds: [monthBudget.id, weekBudget.id],
+      date: referenceDate,
       subscriptionId: subscription.id,
       userId: transactionUserId
     })

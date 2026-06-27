@@ -1,8 +1,10 @@
-# Scheduling Microservice Plan
+# Scheduling Plan
+
+Scheduling runs inside the API process through `apps/api/src/modules/budget-scheduler`.
 
 ## Goal
 
-Create a new `scheduling` microservice that runs every hour and ensures every household has budget records for the current month:
+Run a scheduler every hour and ensure every household has budget records for the current month:
 
 - one monthly budget covering the current calendar month
 - weekly budgets covering each week that intersects the current calendar month
@@ -13,7 +15,7 @@ The job must be idempotent so running it hourly never creates duplicate budgets.
 
 Completed:
 
-- Added `apps/scheduling` as a NestJS application-context worker.
+- Moved scheduling into the API module graph.
 - Added hourly scheduling with `@nestjs/schedule`.
 - Added startup execution plus hourly execution.
 - Added in-process overlap protection.
@@ -22,56 +24,32 @@ Completed:
 - Added `BudgetsRepository.ensureBudgets()` using conflict-safe insert.
 - Added `HouseholdsRepository.listIds()`.
 - Added unique index migration for `budgets(household_id, type, start_date)`.
-- Added `dev:scheduling`, build, and typecheck wiring.
+- Added build and typecheck wiring through the API target.
 - Added `SCHEDULING_ENABLED` and `SCHEDULING_TIMEZONE` env defaults.
-- Added a profile-gated Docker Compose worker service.
 - Verified idempotency against a temporary database.
 
 Still open:
 
 - Add automated unit tests for date utilities.
-- Decide whether entities should eventually move into a shared workspace library.
+- Decide whether entities should eventually move into a shared workspace library if cross-app reuse returns.
 
-## Proposed Shape
+## Current Shape
 
-Add a new NestJS app under `apps/scheduling`.
-
-The service should be a small worker process, not an HTTP API. It should start, connect to PostgreSQL with TypeORM, register an hourly scheduler, and run the budget generation job.
+The scheduler is an API module. It starts with the API process, connects through the existing TypeORM setup, registers an hourly scheduler, and runs the budget generation job.
 
 Recommended app structure:
 
 ```txt
-apps/scheduling/
-  project.json
-  nest-cli.json
-  tsconfig.app.json
-  package.json
-  src/
-    main.ts
-    app.module.ts
-    modules/
-      database/
-      budget-scheduler/
+apps/api/src/modules/budget-scheduler/
+  budget-scheduler.module.ts
+  budget-scheduler.service.ts
 ```
 
-Reuse shared backend domain code where practical:
-
-- `BudgetEntity`
-- `BudgetType`
-- `HouseholdEntity`
-- shared TypeORM database config
-
-If importing API module paths directly becomes awkward, extract shared entities/config into a workspace library later. For the first pass, direct imports from `apps/api/src/modules/...` are acceptable if TypeScript paths and build config stay simple.
+Reuse API domain modules and repositories instead of introducing a second app boundary.
 
 ## Scheduling Behavior
 
-Use `@nestjs/schedule`.
-
-Install and register:
-
-```bash
-pnpm add @nestjs/schedule
-```
+Uses `@nestjs/schedule`.
 
 Scheduler:
 
@@ -89,7 +67,7 @@ onApplicationBootstrap:
   ensureCurrentMonthBudgets()
 ```
 
-For multi-instance deployments, add a database-level advisory lock so only one scheduler instance runs the job at a time.
+For multi-instance deployments, the scheduler uses a PostgreSQL advisory lock so only one API instance runs the job at a time.
 
 ## Budget Creation Rules
 
@@ -138,39 +116,33 @@ This should be added through a TypeORM migration.
 
 The scheduler should use an upsert or `INSERT ... ON CONFLICT DO NOTHING` style operation. Do not rely only on application-side existence checks.
 
-## Required Code Changes
+## Implementation Notes
 
-1. Add a `BudgetsRepository`.
-   - `ensureBudget(input)`
+1. `BudgetsRepository`
    - `ensureBudgets(inputs)`
    - Use a conflict-safe insert.
 
-2. Add a `HouseholdsRepository` method for scheduler use.
+2. `HouseholdsRepository`
    - `listIds()`
    - Return only ids to keep the hourly job lightweight.
 
-3. Add `BudgetSchedulerService`.
+3. `BudgetSchedulerService`
    - Calculates current month windows.
    - Lists households.
    - Ensures monthly and weekly budgets for each household.
    - Logs counts: households scanned, budgets attempted, budgets created/skipped.
 
-4. Add date utilities.
+4. Date utilities
    - `getCurrentMonthRange(now)`
    - `getWeeksIntersectingMonth(monthRange)`
    - Keep these as pure functions with focused tests.
 
-5. Add migration.
+5. Migration
    - unique index on `budgets(household_id, type, start_date)`
 
-6. Add Nx/package scripts.
-   - `dev:scheduling`
-   - include `scheduling` in build/typecheck targets if appropriate
+6. Keep Nx/package scripts routed through the API build/typecheck targets.
 
-7. Update Docker/deployment config.
-   - Add a separate scheduling service container.
-   - It should use the same `DATABASE_URL`.
-   - It should not expose HTTP ports.
+7. Keep Docker/deployment config routed through the API service.
 
 ## Configuration
 
@@ -183,7 +155,7 @@ SCHEDULING_TIMEZONE=America/Chicago
 
 Default behavior:
 
-- enabled by default in the scheduling app
+- enabled by default in the API app
 - timezone defaults to `America/Chicago`
 
 If timezone support needs to be exact across DST and non-local deployments, add a date library such as `date-fns-tz` or `luxon`. Otherwise, use UTC calendar dates consistently and document that decision.
@@ -213,16 +185,15 @@ Integration checks:
 1. Add unique-index migration for budget idempotency.
 2. Implement repository methods.
 3. Implement date utilities with tests.
-4. Scaffold `apps/scheduling`.
-5. Wire TypeORM and scheduler module.
-6. Add local Docker service.
+4. Add the API-local scheduler module.
+5. Wire the scheduler module into the API app.
+6. Use the API service for local Docker/deployment runs.
 7. Run migrations.
-8. Start scheduler locally and verify budgets are created.
+8. Start the API locally and verify budgets are created.
 9. Run the scheduler a second time and confirm no duplicates.
-10. Add README notes for running the worker.
+10. Keep README notes clear that scheduling runs inside the API process.
 
 ## Open Decisions
 
 - Whether weekly budget dates should be full Monday-Sunday weeks or clamped to the current month.
 - Whether scheduling should use app timezone or UTC.
-- Whether entities should remain imported from `apps/api` or move into a shared workspace library before the service grows.

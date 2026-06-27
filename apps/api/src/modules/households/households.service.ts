@@ -194,27 +194,40 @@ export class HouseholdService {
     }
   }
 
-  async listBudgetTransactionsForCurrentUser(currentUserId: string, budgetUserId: string, budgetId: string) {
+  async listBudgetTransactionsForCurrentUser(
+    currentUserId: string,
+    budgetUserId: string,
+    budgetId: string,
+    dateRange: DateRangeSelection
+  ) {
     const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
 
     if (!household) {
       throw new NotFoundException('Household not found')
     }
 
-    const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
+    await this.requireBudgetForHousehold(budgetId, household.householdId)
 
     if (budgetUserId === householdBudgetUserId) {
       await this.requireHouseholdUser(household.householdId, currentUserId)
 
       return {
-        subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByBudgetId(budget.id)).map(toSubscriptionTransaction)
+        subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByHouseholdIdAndDateRange(
+          household.householdId,
+          dateRange.fromDate,
+          dateRange.toDate
+        )).map(toSubscriptionTransaction)
       }
     }
 
     const budgetUser = await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
 
     return {
-      subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByBudgetId(budget.id, budgetUser.userId)).map(toSubscriptionTransaction)
+      subscription_transactions: (await this.subscriptionsRepository.listSubscriptionTransactionsByUserIdAndDateRange(
+        budgetUser.userId,
+        dateRange.fromDate,
+        dateRange.toDate
+      )).map(toSubscriptionTransaction)
     }
   }
 
@@ -260,20 +273,9 @@ export class HouseholdService {
       throw new BadRequestException('Subscription occurrence date does not match this budget period')
     }
 
-    const occurrenceDateParts = parseDateParts(occurrenceDate)
-    await this.budgetsRepository.ensureBudgets(buildBudgetInputsForMonth([household.householdId], occurrenceDateParts.year, occurrenceDateParts.month))
-
-    const occurrenceBudgets = await this.budgetsRepository.listByHouseholdIdAndDate(household.householdId, occurrenceDate)
-    const monthBudget = occurrenceBudgets.find(item => item.type === BudgetType.Month)
-    const weekBudget = occurrenceBudgets.find(item => item.type === BudgetType.Week)
-
-    if (!monthBudget || !weekBudget) {
-      throw new NotFoundException('Budget periods for subscription occurrence date were not found')
-    }
-
     const subscriptionTransaction = await this.subscriptionsRepository.createSubscriptionTransaction({
       amount: subscription.amount,
-      budgetIds: [monthBudget.id, weekBudget.id],
+      date: occurrenceDate,
       subscriptionId: subscription.id,
       userId: currentUserId
     })
@@ -297,15 +299,19 @@ export class HouseholdService {
 
     const budget = await this.requireBudgetForHousehold(budgetId, household.householdId)
     const transactionUserId = await this.getBudgetTransactionUserId(household.householdId, currentUserId, budgetUserId)
-    const deleted = await this.subscriptionsRepository.deleteSubscriptionTransactionByBudgetId(
+    const subscriptionTransaction = await this.subscriptionsRepository.findSubscriptionTransactionByIdAndDateRange(
       transactionId,
-      budget.id,
+      household.householdId,
+      budget.startDate,
+      budget.endDate,
       transactionUserId
     )
 
-    if (!deleted) {
+    if (!subscriptionTransaction) {
       throw new NotFoundException('Subscription transaction not found')
     }
+
+    await this.subscriptionsRepository.deleteSubscriptionTransaction(subscriptionTransaction.id)
 
     return {
       deleted: true
@@ -480,7 +486,13 @@ export class HouseholdService {
   async updateSubscription(householdId: string, userId: string, subscriptionId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
     const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
-    const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
+    const currentSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, householdId)
+
+    if (!currentSubscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    const saveInput = {
       name: getSubscriptionName(input),
       userId: subscriptionUserId,
       type: getSubscriptionType(input),
@@ -488,10 +500,45 @@ export class HouseholdService {
       endDate: getSubscriptionEndDate(input),
       amount: getSubscriptionAmount(input),
       autopay: getSubscriptionAutopay(input)
-    })
+    }
+    const hasTransactions = await this.subscriptionsRepository.hasTransactions(currentSubscription.id)
+
+    if (hasTransactions && shouldCreateSubscriptionReplacement(currentSubscription, saveInput)) {
+      const today = getCurrentDateKey()
+      const replacementStartDate = getNextSubscriptionChargeDate(saveInput.type, saveInput.startDate, today)
+
+      if (saveInput.endDate && saveInput.endDate < replacementStartDate) {
+        throw new BadRequestException('Subscription end date must be on or after the next charge date')
+      }
+
+      const replacementSubscription = await this.subscriptionsRepository.endAndCreateReplacement(
+        householdId,
+        currentSubscription.id,
+        today,
+        {
+          householdId,
+          ...saveInput,
+          startDate: replacementStartDate
+        }
+      )
+
+      if (!replacementSubscription) {
+        throw new NotFoundException('Subscription not found')
+      }
+
+      return {
+        subscription: toSubscription(replacementSubscription)
+      }
+    }
+
+    const subscription = await this.subscriptionsRepository.update(householdId, subscriptionId, saveInput)
 
     if (!subscription) {
       throw new NotFoundException('Subscription not found')
+    }
+
+    if (saveInput.endDate) {
+      await this.subscriptionsRepository.deleteTransactionsAfterDate(subscription.id, saveInput.endDate)
     }
 
     return {
@@ -501,6 +548,16 @@ export class HouseholdService {
 
   async deleteSubscription(householdId: string, userId: string, subscriptionId: string) {
     await this.requireHouseholdUser(householdId, userId)
+    const subscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, householdId)
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    if (await this.subscriptionsRepository.hasTransactions(subscription.id)) {
+      throw new BadRequestException('Subscriptions with transactions cannot be deleted')
+    }
+
     const deleted = await this.subscriptionsRepository.delete(householdId, subscriptionId)
 
     if (!deleted) {
@@ -710,6 +767,75 @@ function getSubscriptionAutopay(input: SaveSubscriptionDto) {
   return input?.autopay === true
 }
 
+function shouldCreateSubscriptionReplacement(
+  currentSubscription: SubscriptionEntity,
+  input: Pick<SubscriptionEntity, 'amount' | 'startDate'>
+) {
+  return Number(currentSubscription.amount).toFixed(2) !== Number(input.amount).toFixed(2)
+    || currentSubscription.startDate !== input.startDate
+}
+
+function getNextSubscriptionChargeDate(type: SubscriptionType, startDate: string, today: string) {
+  const startDateParts = parseDateParts(startDate)
+  const todayParts = parseDateParts(today)
+
+  if (type === SubscriptionType.Yearly) {
+    for (let yearOffset = 0; yearOffset <= 100; yearOffset += 1) {
+      const candidate = getValidUtcDate(todayParts.year + yearOffset, startDateParts.month, startDateParts.day)
+      const candidateDate = candidate ? formatUtcDate(candidate) : null
+
+      if (candidateDate && candidateDate > today) {
+        return candidateDate
+      }
+    }
+  } else {
+    for (let monthOffset = 0; monthOffset <= 240; monthOffset += 1) {
+      const monthStart = new Date(Date.UTC(todayParts.year, todayParts.month - 1 + monthOffset, 1))
+      const candidate = getValidUtcDate(
+        monthStart.getUTCFullYear(),
+        monthStart.getUTCMonth() + 1,
+        startDateParts.day
+      )
+      const candidateDate = candidate ? formatUtcDate(candidate) : null
+
+      if (candidateDate && candidateDate > today) {
+        return candidateDate
+      }
+    }
+  }
+
+  throw new BadRequestException('Could not calculate next subscription charge date')
+}
+
+function getValidUtcDate(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day))
+
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    return null
+  }
+
+  return date
+}
+
+function getCurrentDateKey() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: process.env.SCHEDULING_TIMEZONE || 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date())
+
+  const year = parts.find(part => part.type === 'year')?.value
+  const month = parts.find(part => part.type === 'month')?.value
+  const day = parts.find(part => part.type === 'day')?.value
+
+  if (!year || !month || !day) {
+    throw new Error('Could not determine current subscription date')
+  }
+
+  return `${year}-${month}-${day}`
+}
+
 function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
@@ -842,12 +968,13 @@ function getSubscriptionTransactionOccurrenceDate(input: CreateSubscriptionTrans
   return occurrenceDate
 }
 
-function toSubscriptionTransaction(subscriptionTransaction: { id: string, amount: number, subscriptionId: string, userId: string }) {
+function toSubscriptionTransaction(subscriptionTransaction: { id: string, amount: number, date: string, subscriptionId: string, userId: string }) {
   return {
     id: subscriptionTransaction.id,
     subscriptionId: subscriptionTransaction.subscriptionId,
     userId: subscriptionTransaction.userId,
-    amount: subscriptionTransaction.amount
+    amount: subscriptionTransaction.amount,
+    date: subscriptionTransaction.date
   }
 }
 

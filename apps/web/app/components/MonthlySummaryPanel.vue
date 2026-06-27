@@ -9,11 +9,14 @@ type SummaryItem = {
   value: number
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   dateRange: string
+  isLoading?: boolean
   items: SummaryItem[]
   title: string
-}>()
+}>(), {
+  isLoading: false
+})
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat(undefined, {
@@ -71,7 +74,12 @@ function getValueClass(item: SummaryItem) {
             {{ item.label }}
           </p>
         </div>
+        <USkeleton
+          v-if="props.isLoading"
+          class="mt-2 h-7 w-28"
+        />
         <p
+          v-else
           class="mt-2 text-lg font-semibold tracking-normal"
           :class="getValueClass(item)"
         >

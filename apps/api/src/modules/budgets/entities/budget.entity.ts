@@ -1,6 +1,5 @@
-import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
+import { Column, CreateDateColumn, Entity, Index, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm'
 import { HouseholdEntity } from '../../households/entities/household.entity'
-import { BudgetSubscriptionTransactionEntity } from '../../subscriptions/entities/budget-subscription-transaction.entity'
 import { BudgetType } from './budget-type'
 
 @Entity({ name: 'budgets' })
@@ -38,7 +37,4 @@ export class BudgetEntity {
   @ManyToOne(() => HouseholdEntity, household => household.budgets, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'household_id' })
   household!: HouseholdEntity
-
-  @OneToMany(() => BudgetSubscriptionTransactionEntity, budgetSubscriptionTransaction => budgetSubscriptionTransaction.budget)
-  subscriptionTransactions!: BudgetSubscriptionTransactionEntity[]
 }

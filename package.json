@@ -3,10 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "nx run-many -t build -p api web scheduling",
+    "build": "nx run-many -t build -p api web",
     "dev": "nx run-many -t dev -p api web --parallel",
     "dev:api": "nx dev api",
-    "dev:scheduling": "nx dev scheduling",
     "dev:web": "nx dev web",
     "migration:check": "TS_NODE_PROJECT=apps/api/tsconfig.app.json typeorm-ts-node-commonjs migration:generate apps/api/src/modules/database/migrations/SchemaCheck -d apps/api/src/modules/database/data-source.ts --check",
     "migration:create": "TS_NODE_PROJECT=apps/api/tsconfig.app.json typeorm-ts-node-commonjs migration:create",
@@ -17,7 +16,7 @@
     "preview": "nx preview web",
     "postinstall": "nx run web:prepare",
     "lint": "eslint .",
-    "typecheck": "nx run-many -t typecheck -p api web scheduling"
+    "typecheck": "nx run-many -t typecheck -p api web"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.114",

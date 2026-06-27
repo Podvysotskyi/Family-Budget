@@ -74,21 +74,26 @@ const visibleCalendarEndDate = computed(() => {
 })
 const incomeEntries = computed(() => selectedBudget.value ? budgetStore.getIncomeEntries(selectedBudget.value.id) : [])
 const budgetSubscriptions = computed(() => budgetStore.getUserSubscriptions(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
-const budgetSubscriptionTransactions = computed(() => selectedBudget.value ? budgetStore.getBudgetSubscriptionTransactions(selectedBudget.value.id) : [])
+const budgetSubscriptionTransactions = computed(() => budgetStore.getUserSubscriptionTransactions(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
 const budgetSubscriptionsError = computed(() => {
   return subscriptionActionError.value
     || budgetStore.getUserSubscriptionsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
-    || (selectedBudget.value ? budgetStore.getBudgetSubscriptionTransactionsError(selectedBudget.value.id) : null)
+    || budgetStore.getUserSubscriptionTransactionsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
 })
 const isLoadingBudgetSubscriptions = computed(() => {
   return budgetStore.isUserSubscriptionsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
-    || (selectedBudget.value ? budgetStore.isBudgetSubscriptionTransactionsLoading(selectedBudget.value.id) : false)
+    || budgetStore.isUserSubscriptionTransactionsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+})
+const isLoadingSummary = computed(() => {
+  return budgetStore.isMonthBudgetLoading(budgetUserId.value, selectedMonth.value, selectedYear.value)
+    || (selectedBudget.value ? budgetStore.isIncomeEntriesLoading(selectedBudget.value.id) : true)
+    || isLoadingBudgetSubscriptions.value
 })
 const monthlyIncomeTotal = computed(() => {
   return incomeEntries.value.reduce((total, income) => total + income.amount, 0)
 })
 const paidSubscriptionTransactionsBySubscriptionId = computed(() => {
-  return new Map(budgetSubscriptionTransactions.value.map(transaction => [transaction.subscriptionId, transaction]))
+  return new Map(budgetSubscriptionTransactions.value.map(transaction => [getSubscriptionTransactionKey(transaction), transaction]))
 })
 const selectedPeriodSubscriptions = computed(() => {
   if (!selectedBudget.value) {
@@ -101,7 +106,7 @@ const selectedPeriodSubscriptions = computed(() => {
 })
 const budgetSubscriptionPayments = computed<BudgetSubscriptionPayment[]>(() => {
   return selectedPeriodSubscriptions.value.map((subscription) => {
-    const transaction = paidSubscriptionTransactionsBySubscriptionId.value.get(subscription.id)
+    const transaction = paidSubscriptionTransactionsBySubscriptionId.value.get(getSubscriptionKey(subscription))
 
     return {
       ...subscription,
@@ -184,15 +189,16 @@ if (import.meta.client) {
   watch(() => selectedBudget.value?.id, async (budgetId) => {
     if (budgetId) {
       subscriptionActionError.value = ''
-      await Promise.all([
-        budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId),
-        budgetStore.fetchBudgetSubscriptionTransactions(budgetUserId.value, budgetId)
-      ])
+      await budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId)
     }
   }, { immediate: true })
 
-  watch([budgetUserId, visibleCalendarStartDate, visibleCalendarEndDate], async ([userId, fromDate, toDate]) => {
+  watch([budgetUserId, () => monthlyBudget.value?.id, visibleCalendarStartDate, visibleCalendarEndDate], async ([userId, budgetId, fromDate, toDate]) => {
     await budgetStore.fetchUserSubscriptions(userId, fromDate, toDate)
+
+    if (budgetId) {
+      await budgetStore.fetchSubscriptionTransactions(userId, budgetId, fromDate, toDate)
+    }
   }, { immediate: true })
 
   watch([selectedMonth, selectedYear], () => {
@@ -470,6 +476,10 @@ async function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
 function getSubscriptionKey(subscription: Pick<BudgetSubscription, 'id' | 'occurrenceDate'>) {
   return `${subscription.id}:${subscription.occurrenceDate}`
 }
+
+function getSubscriptionTransactionKey(transaction: { subscriptionId: string, date: string }) {
+  return `${transaction.subscriptionId}:${transaction.date}`
+}
 </script>
 
 <template>
@@ -523,6 +533,7 @@ function getSubscriptionKey(subscription: Pick<BudgetSubscription, 'id' | 'occur
       <MonthlySummaryPanel
         :title="summaryTitle"
         :date-range="summaryDateRange"
+        :is-loading="isLoadingSummary"
         :items="monthlySummary"
       />
 

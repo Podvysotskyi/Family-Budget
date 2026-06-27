@@ -24,6 +24,7 @@ export type BudgetSubscription = {
 
 export type SubscriptionTransaction = {
   amount: number
+  date: string
   id: string
   subscriptionId: string
   userId: string
@@ -50,9 +51,9 @@ export const useBudgetsStore = defineStore('budgets', {
     subscriptionErrorsByRangeKey: {} as Record<string, string | null>,
     subscriptionLoadingByRangeKey: {} as Record<string, boolean>,
     subscriptionsByRangeKey: {} as Record<string, BudgetSubscription[]>,
-    transactionErrorsByBudgetId: {} as Record<string, string | null>,
-    transactionLoadingByBudgetId: {} as Record<string, boolean>,
-    transactionsByBudgetId: {} as Record<string, SubscriptionTransaction[]>
+    transactionErrorsByRangeKey: {} as Record<string, string | null>,
+    transactionLoadingByRangeKey: {} as Record<string, boolean>,
+    transactionsByRangeKey: {} as Record<string, SubscriptionTransaction[]>
   }),
 
   actions: {
@@ -73,28 +74,32 @@ export const useBudgetsStore = defineStore('budgets', {
       return this.incomesByBudgetId[budgetId] || []
     },
 
+    isIncomeEntriesLoading(budgetId: string) {
+      return this.incomeLoadingByBudgetId[budgetId] || false
+    },
+
     getUserSubscriptions(userId: string, fromDate: string, toDate: string) {
       return this.subscriptionsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || []
     },
 
-    getBudgetSubscriptionTransactions(budgetId: string) {
-      return this.transactionsByBudgetId[budgetId] || []
+    getUserSubscriptionTransactions(userId: string, fromDate: string, toDate: string) {
+      return this.transactionsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || []
     },
 
     getUserSubscriptionsError(userId: string, fromDate: string, toDate: string) {
       return this.subscriptionErrorsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || null
     },
 
-    getBudgetSubscriptionTransactionsError(budgetId: string) {
-      return this.transactionErrorsByBudgetId[budgetId] || null
+    getUserSubscriptionTransactionsError(userId: string, fromDate: string, toDate: string) {
+      return this.transactionErrorsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || null
     },
 
     isUserSubscriptionsLoading(userId: string, fromDate: string, toDate: string) {
       return this.subscriptionLoadingByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || false
     },
 
-    isBudgetSubscriptionTransactionsLoading(budgetId: string) {
-      return this.transactionLoadingByBudgetId[budgetId] || false
+    isUserSubscriptionTransactionsLoading(userId: string, fromDate: string, toDate: string) {
+      return this.transactionLoadingByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || false
     },
 
     getMonthBudget(userId: string, month: number, year: number) {
@@ -107,6 +112,10 @@ export const useBudgetsStore = defineStore('budgets', {
 
     getMonthBudgetResponse(userId: string, month: number, year: number) {
       return this.monthBudgetsByKey[this.getMonthKey(userId, month, year)] || null
+    },
+
+    isMonthBudgetLoading(userId: string, month: number, year: number) {
+      return this.monthBudgetLoadingByKey[this.getMonthKey(userId, month, year)] || false
     },
 
     async createIncome(userId: string, budgetId: string, payload: {
@@ -177,24 +186,30 @@ export const useBudgetsStore = defineStore('budgets', {
       }
     },
 
-    async fetchBudgetSubscriptionTransactions(userId: string, budgetId: string) {
-      if (!budgetId || this.transactionLoadingByBudgetId[budgetId]) {
+    async fetchSubscriptionTransactions(userId: string, budgetId: string, fromDate: string, toDate: string) {
+      const key = this.getSubscriptionRangeKey(userId, fromDate, toDate)
+
+      if (!userId || !budgetId || !fromDate || !toDate || this.transactionLoadingByRangeKey[key]) {
         return
       }
 
-      this.transactionLoadingByBudgetId[budgetId] = true
-      this.transactionErrorsByBudgetId[budgetId] = null
+      this.transactionLoadingByRangeKey[key] = true
+      this.transactionErrorsByRangeKey[key] = null
 
       try {
+        const query = new URLSearchParams({
+          from_date: fromDate,
+          to_date: toDate
+        })
         const response = await storeApiFetch<{
           subscription_transactions: SubscriptionTransaction[]
-        }>(`/user/${userId}/budget/${budgetId}/transactions`)
+        }>(`/user/${userId}/budget/${budgetId}/transactions?${query.toString()}`)
 
-        this.transactionsByBudgetId[budgetId] = response.subscription_transactions
+        this.transactionsByRangeKey[key] = response.subscription_transactions
       } catch {
-        this.transactionErrorsByBudgetId[budgetId] = 'Subscription transactions could not be loaded'
+        this.transactionErrorsByRangeKey[key] = 'Subscription transactions could not be loaded'
       } finally {
-        this.transactionLoadingByBudgetId[budgetId] = false
+        this.transactionLoadingByRangeKey[key] = false
       }
     },
 
@@ -211,21 +226,17 @@ export const useBudgetsStore = defineStore('budgets', {
       const transaction = response.subscription_transactions[0]
 
       if (transaction) {
-        const budgetIds = new Set([
-          budgetId,
-          ...Object.values(this.monthBudgetsByKey)
-            .flatMap(monthBudget => [monthBudget.month, ...monthBudget.weeks])
-            .filter(period => subscription.occurrenceDate >= period.startDate && subscription.occurrenceDate <= period.endDate)
-            .map(period => period.id)
-        ])
-
-        for (const subscriptionsBudgetId of budgetIds) {
-          if (this.getBudgetSubscriptionTransactions(subscriptionsBudgetId).some(item => item.id === transaction.id)) {
+        for (const rangeKey of Object.keys(this.transactionsByRangeKey)) {
+          if (!isDateInsideRangeKey(rangeKey, subscription.occurrenceDate)) {
             continue
           }
 
-          this.transactionsByBudgetId[subscriptionsBudgetId] = [
-            ...this.getBudgetSubscriptionTransactions(subscriptionsBudgetId),
+          if (this.transactionsByRangeKey[rangeKey]!.some(item => item.id === transaction.id)) {
+            continue
+          }
+
+          this.transactionsByRangeKey[rangeKey] = [
+            ...this.transactionsByRangeKey[rangeKey]!,
             transaction
           ]
         }
@@ -245,8 +256,8 @@ export const useBudgetsStore = defineStore('budgets', {
         method: 'DELETE'
       })
 
-      for (const subscriptionsBudgetId of Object.keys(this.transactionsByBudgetId)) {
-        this.transactionsByBudgetId[subscriptionsBudgetId] = this.getBudgetSubscriptionTransactions(subscriptionsBudgetId)
+      for (const rangeKey of Object.keys(this.transactionsByRangeKey)) {
+        this.transactionsByRangeKey[rangeKey] = this.transactionsByRangeKey[rangeKey]!
           .filter(transaction => transaction.id !== subscription.transactionId)
       }
     },
@@ -288,3 +299,9 @@ export const useBudgetsStore = defineStore('budgets', {
     }
   }
 })
+
+function isDateInsideRangeKey(rangeKey: string, date: string) {
+  const [, fromDate, toDate] = rangeKey.split(':')
+
+  return Boolean(fromDate && toDate && date >= fromDate && date <= toDate)
+}

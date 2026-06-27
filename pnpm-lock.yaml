@@ -111,8 +111,6 @@ importers:
 
   apps/api: {}
 
-  apps/scheduling: {}
-
 packages:
 
   '@alloc/quick-lru@5.2.0':

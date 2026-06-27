@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { Brackets, type SelectQueryBuilder, type Repository } from 'typeorm'
-import { BudgetSubscriptionTransactionEntity } from './entities/budget-subscription-transaction.entity'
+import { Brackets, MoreThan, type SelectQueryBuilder, type Repository } from 'typeorm'
 import { SubscriptionTransactionEntity } from './entities/subscription-transaction.entity'
 import { SubscriptionEntity } from './entities/subscription.entity'
 import { SubscriptionType } from './entities/subscription-type'
@@ -19,7 +18,7 @@ export interface SaveSubscriptionInput {
 
 export interface CreateSubscriptionTransactionInput {
   amount: number
-  budgetIds: string[]
+  date: string
   subscriptionId: string
   userId: string
 }
@@ -107,6 +106,49 @@ export class SubscriptionsRepository {
     return this.findByIdAndHouseholdId(subscription.id, householdId)
   }
 
+  async endAndCreateReplacement(
+    householdId: string,
+    subscriptionId: string,
+    currentEndDate: string,
+    replacementInput: SaveSubscriptionInput
+  ) {
+    return this.subscriptionsRepository.manager.transaction(async (manager) => {
+      const subscription = await manager.findOne(SubscriptionEntity, {
+        where: {
+          id: subscriptionId,
+          householdId
+        }
+      })
+
+      if (!subscription) {
+        return null
+      }
+
+      manager.merge(SubscriptionEntity, subscription, {
+        endDate: currentEndDate
+      })
+
+      await manager.save(SubscriptionEntity, subscription)
+
+      await manager.delete(SubscriptionTransactionEntity, {
+        subscriptionId,
+        date: MoreThan(currentEndDate)
+      })
+
+      const replacement = await manager.save(SubscriptionEntity, manager.create(SubscriptionEntity, replacementInput))
+
+      return manager.findOne(SubscriptionEntity, {
+        where: {
+          id: replacement.id,
+          householdId
+        },
+        relations: {
+          user: true
+        }
+      })
+    })
+  }
+
   async delete(householdId: string, subscriptionId: string) {
     const result = await this.subscriptionsRepository.delete({
       id: subscriptionId,
@@ -128,104 +170,96 @@ export class SubscriptionsRepository {
     })
   }
 
-  listSubscriptionTransactionsByBudgetId(budgetId: string, userId?: string) {
+  async hasTransactions(subscriptionId: string) {
+    const count = await this.subscriptionTransactionsRepository.count({
+      where: {
+        subscriptionId
+      }
+    })
+
+    return count > 0
+  }
+
+  async deleteTransactionsAfterDate(subscriptionId: string, date: string) {
+    const result = await this.subscriptionTransactionsRepository.delete({
+      subscriptionId,
+      date: MoreThan(date)
+    })
+
+    return result.affected || 0
+  }
+
+  listSubscriptionTransactionsByHouseholdIdAndDateRange(householdId: string, startDate: string, endDate: string) {
+    return orderSubscriptionTransactions(this.subscriptionTransactionsRepository
+      .createQueryBuilder('subscriptionTransaction')
+      .innerJoin('subscriptionTransaction.subscription', 'subscription')
+      .where('subscription.household_id = :householdId', { householdId })
+      .andWhere('subscriptionTransaction.date >= :startDate', { startDate })
+      .andWhere('subscriptionTransaction.date <= :endDate', { endDate }))
+      .getMany()
+  }
+
+  listSubscriptionTransactionsByUserIdAndDateRange(userId: string, startDate: string, endDate: string) {
+    return orderSubscriptionTransactions(this.subscriptionTransactionsRepository
+      .createQueryBuilder('subscriptionTransaction')
+      .innerJoin('subscriptionTransaction.subscription', 'subscription')
+      .where('subscription.user_id = :userId', { userId })
+      .andWhere('subscriptionTransaction.date >= :startDate', { startDate })
+      .andWhere('subscriptionTransaction.date <= :endDate', { endDate }))
+      .getMany()
+  }
+
+  findSubscriptionTransactionByIdAndDateRange(
+    transactionId: string,
+    householdId: string,
+    startDate: string,
+    endDate: string,
+    userId?: string
+  ) {
     const query = this.subscriptionTransactionsRepository
       .createQueryBuilder('subscriptionTransaction')
-      .innerJoin(
-        BudgetSubscriptionTransactionEntity,
-        'budgetSubscriptionTransaction',
-        'budgetSubscriptionTransaction.subscription_transaction_id = subscriptionTransaction.id'
-      )
       .innerJoin('subscriptionTransaction.subscription', 'subscription')
-      .where('budgetSubscriptionTransaction.budget_id = :budgetId', { budgetId })
-      .orderBy('subscriptionTransaction.created_at', 'ASC')
+      .where('subscriptionTransaction.id = :transactionId', { transactionId })
+      .andWhere('subscription.household_id = :householdId', { householdId })
+      .andWhere('subscriptionTransaction.date >= :startDate', { startDate })
+      .andWhere('subscriptionTransaction.date <= :endDate', { endDate })
 
     if (userId) {
       query.andWhere('subscription.user_id = :userId', { userId })
     }
 
-    return query.getMany()
+    return query.getOne()
   }
 
   async createSubscriptionTransaction(input: CreateSubscriptionTransactionInput) {
-    const budgetIds = [...new Set(input.budgetIds)]
-
     return this.subscriptionTransactionsRepository.manager.transaction(async (manager) => {
       const existingTransaction = await manager
         .getRepository(SubscriptionTransactionEntity)
         .createQueryBuilder('subscriptionTransaction')
-        .innerJoin(
-          BudgetSubscriptionTransactionEntity,
-          'budgetSubscriptionTransaction',
-          'budgetSubscriptionTransaction.subscription_transaction_id = subscriptionTransaction.id'
-        )
         .where('subscriptionTransaction.subscription_id = :subscriptionId', { subscriptionId: input.subscriptionId })
-        .andWhere('budgetSubscriptionTransaction.budget_id IN (:...budgetIds)', { budgetIds })
+        .andWhere('subscriptionTransaction.date = :date', { date: input.date })
         .getOne()
 
       if (existingTransaction) {
-        await manager
-          .createQueryBuilder()
-          .insert()
-          .into(BudgetSubscriptionTransactionEntity)
-          .values(budgetIds.map(budgetId => ({
-            budgetId,
-            subscriptionTransactionId: existingTransaction.id
-          })))
-          .orIgnore()
-          .execute()
-
         return existingTransaction
       }
 
       const subscriptionTransaction = await manager.save(SubscriptionTransactionEntity, manager.create(SubscriptionTransactionEntity, {
         amount: input.amount,
+        date: input.date,
         subscriptionId: input.subscriptionId,
         userId: input.userId
       }))
-
-      await manager
-        .createQueryBuilder()
-        .insert()
-        .into(BudgetSubscriptionTransactionEntity)
-        .values(budgetIds.map(budgetId => ({
-          budgetId,
-          subscriptionTransactionId: subscriptionTransaction.id
-        })))
-        .orIgnore()
-        .execute()
 
       return subscriptionTransaction
     })
   }
 
-  async deleteSubscriptionTransactionByBudgetId(transactionId: string, budgetId: string, userId?: string) {
+  async deleteSubscriptionTransaction(transactionId: string) {
     return this.subscriptionTransactionsRepository.manager.transaction(async (manager) => {
-      const query = manager
-        .getRepository(SubscriptionTransactionEntity)
-        .createQueryBuilder('subscriptionTransaction')
-        .innerJoin(
-          BudgetSubscriptionTransactionEntity,
-          'budgetSubscriptionTransaction',
-          'budgetSubscriptionTransaction.subscription_transaction_id = subscriptionTransaction.id'
-        )
-        .innerJoin('subscriptionTransaction.subscription', 'subscription')
-        .where('subscriptionTransaction.id = :transactionId', { transactionId })
-        .andWhere('budgetSubscriptionTransaction.budget_id = :budgetId', { budgetId })
+      const result = await manager.delete(SubscriptionTransactionEntity, transactionId)
 
-      if (userId) {
-        query.andWhere('subscription.user_id = :userId', { userId })
-      }
-
-      const subscriptionTransaction = await query.getOne()
-
-      if (!subscriptionTransaction) {
-        return false
-      }
-
-      await manager.delete(SubscriptionTransactionEntity, subscriptionTransaction.id)
-
-      return true
+      return Boolean(result.affected)
     })
   }
 }
@@ -236,4 +270,10 @@ function orderSubscriptions(query: SelectQueryBuilder<SubscriptionEntity>) {
     .addOrderBy('subscription.start_date', 'ASC')
     .addOrderBy('subscription.name', 'ASC')
     .addOrderBy('subscription.created_at', 'ASC')
+}
+
+function orderSubscriptionTransactions(query: SelectQueryBuilder<SubscriptionTransactionEntity>) {
+  return query
+    .orderBy('subscriptionTransaction.date', 'ASC')
+    .addOrderBy('subscriptionTransaction.created_at', 'ASC')
 }

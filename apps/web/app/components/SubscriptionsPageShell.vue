@@ -315,7 +315,7 @@ async function deleteSubscription() {
     await subscriptionsStore.deleteSubscription(householdId.value, subscriptionPendingDelete.value.id)
     closeDeletionModal()
   } catch {
-    deletionError.value = 'Subscription could not be deleted.'
+    deletionError.value = 'Subscription could not be deleted. Subscriptions with paid transactions cannot be deleted.'
   } finally {
     deletingSubscriptionId.value = null
   }
@@ -396,7 +396,13 @@ function setCancellationEffectiveDate(value: CalendarModelValue, close: () => vo
 function isActiveSubscription(subscription: Subscription) {
   const today = getTodayDate()
 
-  return subscription.startDate <= today && (!subscription.endDate || subscription.endDate >= today)
+  return !subscription.endDate || subscription.endDate >= today
+}
+
+function isExpiredSubscription(subscription: Subscription) {
+  const today = getTodayDate()
+
+  return Boolean(subscription.endDate && subscription.endDate < today)
 }
 
 function isMemberAssignment(value: string) {
@@ -482,15 +488,10 @@ function getTodayDate() {
           Subscriptions
         </h2>
 
-        <UButton
-          icon="i-lucide-activity"
+        <USwitch
+          v-model="showOnlyActiveSubscriptions"
           label="Active only"
-          color="neutral"
-          size="sm"
-          :variant="showOnlyActiveSubscriptions ? 'solid' : 'outline'"
-          :aria-pressed="showOnlyActiveSubscriptions"
           :disabled="pending || !householdId"
-          @click="showOnlyActiveSubscriptions = !showOnlyActiveSubscriptions"
         />
       </div>
 
@@ -539,6 +540,12 @@ function getTodayDate() {
                 color="primary"
                 variant="subtle"
                 label="Autopay"
+              />
+              <UBadge
+                v-if="isExpiredSubscription(subscription)"
+                color="warning"
+                variant="subtle"
+                label="Expired"
               />
             </div>
             <p class="mt-1 text-sm text-muted">
