@@ -25,11 +25,8 @@ const pending = computed(() => creditCardsStore.isLoading(householdId.value))
 const error = computed(() => creditCardsStore.getError(householdId.value))
 const assignmentFilter = ref(getDefaultAssignmentFilter())
 const showOnlyActiveCreditCards = ref(true)
-const creditCardPendingDelete = ref<CreditCard | null>(null)
-const deletingCreditCardId = ref<string | null>(null)
-const deletionError = ref<string | null>(null)
-const cancellationEffectiveDate = ref(getTodayDateString())
 const creditCardBalanceModal = ref<InstanceType<typeof CreditCardBalanceModal> | null>(null)
+const creditCardCloseModal = ref<InstanceType<typeof CreditCardCloseModal> | null>(null)
 const editingCreditCardId = ref<string | null>(null)
 const formError = ref<string | null>(null)
 const isCreditCardModalOpen = ref(false)
@@ -78,7 +75,6 @@ const trimmedCreditCardName = computed(() => creditCardName.value.trim())
 const parsedCreditCardLimit = computed(() => Number(creditCardLimit.value))
 const isEditingCreditCard = computed(() => Boolean(editingCreditCardId.value))
 const creditCardDueDateMin = computed(() => isEditingCreditCard.value ? creditCardStartDate.value : undefined)
-const creditCardCancellationDateMin = computed(() => creditCardPendingDelete.value?.startDate || '')
 const canSaveCreditCard = computed(() => {
   return Boolean(!pending.value && trimmedCreditCardName.value && householdId.value && creditCardLimit.value)
 })
@@ -195,15 +191,7 @@ function startDeletingCreditCard(creditCard: CreditCard) {
     return
   }
 
-  deletionError.value = null
-  cancellationEffectiveDate.value = getTodayDateString()
-  creditCardPendingDelete.value = creditCard
-}
-
-function closeDeletionModal() {
-  creditCardPendingDelete.value = null
-  deletionError.value = null
-  cancellationEffectiveDate.value = getTodayDateString()
+  creditCardCloseModal.value?.open(creditCard)
 }
 
 function startEditingCreditCardBalance(creditCard: CreditCard) {
@@ -266,47 +254,6 @@ async function saveCreditCard() {
     formError.value = editingCreditCardId.value ? 'Credit card could not be saved.' : 'Credit card could not be created.'
   } finally {
     isSavingCreditCard.value = false
-  }
-}
-
-async function cancelCreditCard() {
-  deletionError.value = null
-
-  if (!creditCardPendingDelete.value) {
-    return
-  }
-
-  if (!householdId.value) {
-    deletionError.value = 'Household is required.'
-    return
-  }
-
-  if (!cancellationEffectiveDate.value) {
-    deletionError.value = 'Effective date is required.'
-    return
-  }
-
-  if (cancellationEffectiveDate.value < creditCardPendingDelete.value.startDate) {
-    deletionError.value = 'Effective date must be on or after the start date.'
-    return
-  }
-
-  if (creditCardPendingDelete.value.endDate) {
-    deletionError.value = 'Credit card is already canceled.'
-    return
-  }
-
-  deletingCreditCardId.value = creditCardPendingDelete.value.id
-
-  try {
-    await creditCardsStore.cancelCreditCard(householdId.value, creditCardPendingDelete.value.id, {
-      effectiveDate: cancellationEffectiveDate.value
-    })
-    closeDeletionModal()
-  } catch {
-    deletionError.value = 'Credit card could not be canceled.'
-  } finally {
-    deletingCreditCardId.value = null
   }
 }
 
@@ -534,7 +481,6 @@ function buildCreditCardAssignmentPath(assignment: string) {
               color="neutral"
               variant="ghost"
               aria-label="Edit credit card"
-              :disabled="deletingCreditCardId === creditCard.id"
               @click="startEditingCreditCard(creditCard)"
             />
             <UButton
@@ -543,7 +489,6 @@ function buildCreditCardAssignmentPath(assignment: string) {
               color="warning"
               variant="ghost"
               aria-label="Cancel credit card"
-              :disabled="deletingCreditCardId === creditCard.id"
               @click="startDeletingCreditCard(creditCard)"
             />
           </div>
@@ -579,16 +524,6 @@ function buildCreditCardAssignmentPath(assignment: string) {
 
     <CreditCardBalanceModal ref="creditCardBalanceModal" />
 
-    <CreditCardCloseModal
-      v-model:effective-date="cancellationEffectiveDate"
-      :open="Boolean(creditCardPendingDelete)"
-      :credit-card-name="creditCardPendingDelete?.name || ''"
-      :is-closing="Boolean(deletingCreditCardId)"
-      :error="deletionError"
-      :min-date="creditCardCancellationDateMin"
-      @update:open="(value: boolean) => !value && closeDeletionModal()"
-      @keep="closeDeletionModal"
-      @confirm="cancelCreditCard"
-    />
+    <CreditCardCloseModal ref="creditCardCloseModal" />
   </UContainer>
 </template>

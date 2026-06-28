@@ -44,6 +44,18 @@ export type CancelCreditCardInput = {
   effectiveDate: string
 }
 
+export type CreditCardCancellationFormData = {
+  effectiveDate: Date | null
+}
+
+export type CreditCardCancellationSubmitData = {
+  effectiveDate: Date
+}
+
+export type CreditCardCancellationSubmitEvent = {
+  data: CreditCardCancellationSubmitData
+}
+
 export type SaveCreditCardBalanceInput = {
   date: string
   balance: number
