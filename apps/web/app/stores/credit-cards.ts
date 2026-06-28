@@ -50,7 +50,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
     },
 
     async updateCreditCard(householdId: string, creditCardId: string, input: SaveCreditCardInput) {
-      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}`, {
+      await storeApiFetch(`/credit-cards/${creditCardId}`, {
         method: 'PATCH',
         body: input
       })
@@ -58,7 +58,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
     },
 
     async cancelCreditCard(householdId: string, creditCardId: string, input: CancelCreditCardInput) {
-      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}/cancel`, {
+      await storeApiFetch(`/credit-cards/${creditCardId}/cancel`, {
         method: 'PATCH',
         body: input
       })

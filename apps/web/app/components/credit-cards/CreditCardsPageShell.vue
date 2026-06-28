@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
 import type { CreditCard } from '~/types/credit-cards'
-import CreditCardBalanceModal from '~/components/credit-cards/CreditCardBalanceModal.vue'
 import CreditCardCloseModal from '~/components/credit-cards/CreditCardCloseModal.vue'
 import CreditCardCreateModal from '~/components/credit-cards/CreditCardCreateModal.vue'
 import CreditCardEditModal from '~/components/credit-cards/CreditCardEditModal.vue'
+import CreditCardUpdateBalanceModal from '~/components/credit-cards/CreditCardUpdateBalanceModal.vue'
 
 defineOptions({
   name: 'CreditCardsPageShell'
@@ -26,10 +26,10 @@ const pending = computed(() => creditCardsStore.isLoading(householdId.value))
 const error = computed(() => creditCardsStore.getError(householdId.value))
 const assignmentFilter = ref(getDefaultAssignmentFilter())
 const showOnlyActiveCreditCards = ref(true)
-const creditCardBalanceModal = ref<InstanceType<typeof CreditCardBalanceModal> | null>(null)
 const creditCardCloseModal = ref<InstanceType<typeof CreditCardCloseModal> | null>(null)
 const creditCardCreateModal = ref<InstanceType<typeof CreditCardCreateModal> | null>(null)
 const creditCardEditModal = ref<InstanceType<typeof CreditCardEditModal> | null>(null)
+const creditCardUpdateBalanceModal = ref<InstanceType<typeof CreditCardUpdateBalanceModal> | null>(null)
 const hasMultipleMembers = computed(() => members.value.length > 1)
 const creditCardNavigationItems = computed<NavigationMenuItem[]>(() => {
   return [
@@ -135,7 +135,7 @@ function startEditingCreditCardBalance(creditCard: CreditCard) {
     return
   }
 
-  creditCardBalanceModal.value?.open(creditCard)
+  creditCardUpdateBalanceModal.value?.open(creditCard)
 }
 
 function getDefaultAssignmentFilter() {
@@ -395,7 +395,7 @@ function buildCreditCardAssignmentPath(assignment: string) {
 
     <CreditCardEditModal ref="creditCardEditModal" />
 
-    <CreditCardBalanceModal ref="creditCardBalanceModal" />
+    <CreditCardUpdateBalanceModal ref="creditCardUpdateBalanceModal" />
 
     <CreditCardCloseModal ref="creditCardCloseModal" />
   </UContainer>

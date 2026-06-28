@@ -5,7 +5,7 @@ import type { CreditCard, SaveCreditCardBalanceInput } from '~/types/credit-card
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
 defineOptions({
-  name: 'CreditCardBalanceModal'
+  name: 'CreditCardUpdateBalanceModal'
 })
 
 const creditCardsStore = useCreditCardsStore()
@@ -107,7 +107,7 @@ defineExpose({
 <template>
   <UModal
     :open="isOpen"
-    title="Edit balance"
+    title="Update credit card balance"
     :close="false"
     :dismissible="false"
     @close="handleClose"
