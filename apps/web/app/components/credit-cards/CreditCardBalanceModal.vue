@@ -67,7 +67,7 @@ async function save(event: CreditCardBalanceSubmitEvent) {
       balance: event.data.balance
     }
 
-    await creditCardsStore.saveCreditCardBalance(selectedCreditCard.value.householdId, selectedCreditCard.value.id, input)
+    await creditCardsStore.saveCreditCardBalance(selectedCreditCard.value!.householdId, selectedCreditCard.value!.id, input)
     addSuccessToast('Credit card balance saved.')
     close(true)
   } catch {
