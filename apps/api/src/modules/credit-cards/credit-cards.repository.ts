@@ -225,4 +225,17 @@ export class CreditCardsRepository {
       }
     })
   }
+
+  findById(creditCardId: string) {
+    return this.creditCardsRepository.findOne({
+      where: {
+        id: creditCardId
+      },
+      relations: {
+        balances: true,
+        limits: true,
+        user: true
+      }
+    })
+  }
 }

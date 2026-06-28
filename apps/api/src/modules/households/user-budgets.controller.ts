@@ -1,7 +1,9 @@
-import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Query, Req } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, Req } from '@nestjs/common'
 import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
+import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
+import type { UpdateCreditCardBalanceDto } from '../credit-cards/dto/update-credit-card-balance.dto'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
 import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
 import { HouseholdService } from './households.service'
@@ -182,6 +184,51 @@ export class UserBudgetsController {
     }
 
     return this.householdService.createUserCreditCard(user.id, budgetUserId, input)
+  }
+
+  @Patch('credit-cards/:id')
+  updateCreditCard(
+    @Param('id') creditCardId: string,
+    @Body() input: SaveCreditCardDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.updateCreditCardForCurrentUser(user.id, creditCardId, input)
+  }
+
+  @Patch('credit-cards/:id/cancel')
+  cancelCreditCard(
+    @Param('id') creditCardId: string,
+    @Body() input: CancelCreditCardDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.cancelCreditCardForCurrentUser(user.id, creditCardId, input)
+  }
+
+  @Patch('credit-cards/:id/balance')
+  updateCreditCardBalance(
+    @Param('id') creditCardId: string,
+    @Body() input: UpdateCreditCardBalanceDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.updateCreditCardBalanceForCurrentUser(user.id, creditCardId, input)
   }
 }
 

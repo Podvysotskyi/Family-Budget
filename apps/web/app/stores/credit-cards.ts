@@ -50,7 +50,9 @@ export const useCreditCardsStore = defineStore('creditCards', {
           addErrorToast('Credit cards could not be loaded')
         }
       } finally {
-        this.loading = false
+        if (!abortController.signal.aborted) {
+          this.loading = false
+        }
       }
     },
 
@@ -78,7 +80,9 @@ export const useCreditCardsStore = defineStore('creditCards', {
           addErrorToast('Credit cards could not be loaded')
         }
       } finally {
-        this.loading = false
+        if (!abortController.signal.aborted) {
+          this.loading = false
+        }
       }
     },
 

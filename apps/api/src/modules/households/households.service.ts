@@ -557,7 +557,7 @@ export class HouseholdService {
 
     return {
       creditCards: creditCards
-        .filter(creditCard => !creditCard.userId || creditCard.userId === userId)
+        .filter(creditCard => !creditCard.userId)
         .map(creditCard => toCreditCard(creditCard, onlyMember))
     }
   }
@@ -676,6 +676,16 @@ export class HouseholdService {
     }
   }
 
+  async updateCreditCardForCurrentUser(userId: string, creditCardId: string, input: SaveCreditCardDto) {
+    const creditCard = await this.creditCardsRepository.findById(creditCardId)
+
+    if (!creditCard) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    return this.updateCreditCard(creditCard.householdId, userId, creditCardId, input)
+  }
+
   async cancelCreditCard(householdId: string, userId: string, creditCardId: string, input: CancelCreditCardDto) {
     await this.requireHouseholdUser(householdId, userId)
     const creditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
@@ -697,6 +707,16 @@ export class HouseholdService {
     return {
       canceled: true
     }
+  }
+
+  async cancelCreditCardForCurrentUser(userId: string, creditCardId: string, input: CancelCreditCardDto) {
+    const creditCard = await this.creditCardsRepository.findById(creditCardId)
+
+    if (!creditCard) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    return this.cancelCreditCard(creditCard.householdId, userId, creditCardId, input)
   }
 
   async updateCreditCardBalance(householdId: string, userId: string, creditCardId: string, input: UpdateCreditCardBalanceDto) {
@@ -721,6 +741,16 @@ export class HouseholdService {
     return {
       balance
     }
+  }
+
+  async updateCreditCardBalanceForCurrentUser(userId: string, creditCardId: string, input: UpdateCreditCardBalanceDto) {
+    const creditCard = await this.creditCardsRepository.findById(creditCardId)
+
+    if (!creditCard) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    return this.updateCreditCardBalance(creditCard.householdId, userId, creditCardId, input)
   }
 
   async listGoals(householdId: string, userId: string) {
