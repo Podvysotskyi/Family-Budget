@@ -76,8 +76,15 @@ const canCreateCreditCard = computed(() => {
 const filteredCreditCards = computed(() => {
   return creditCards.value.filter(creditCard => !showOnlyActiveCreditCards.value || isActiveCreditCard(creditCard))
 })
+const hasSelectedCreditCards = computed(() => {
+  if (assignmentFilter.value === householdAssignmentValue) {
+    return creditCardsStore.hasHouseholdCreditCards
+  }
+
+  return creditCardsStore.hasUserCreditCards(assignmentFilter.value)
+})
 const emptyCreditCardsMessage = computed(() => {
-  if (!creditCardsStore.hasCreditCards) {
+  if (!hasSelectedCreditCards.value) {
     return 'No credit cards found.'
   }
 

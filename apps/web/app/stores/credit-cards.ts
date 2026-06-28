@@ -18,8 +18,10 @@ export const useCreditCardsStore = defineStore('creditCards', {
       return state.userCreditCards[userId] || []
     },
 
-    hasCreditCards: (state) => {
-      return state.householdCreditCards.length > 0 || Object.values(state.userCreditCards).some(creditCards => creditCards.length > 0)
+    hasHouseholdCreditCards: state => state.householdCreditCards.length > 0,
+
+    hasUserCreditCards: state => (userId: string) => {
+      return Boolean(state.userCreditCards[userId]?.length)
     },
 
     isLoading: state => state.loading
