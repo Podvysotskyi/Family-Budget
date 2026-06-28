@@ -1,6 +1,6 @@
 export type CreditCardBalanceFormData = {
-  date: Date
-  balance: number | undefined
+  date: Date | null
+  balance: number | null
 }
 
 export type CreditCardBalanceSubmitData = {

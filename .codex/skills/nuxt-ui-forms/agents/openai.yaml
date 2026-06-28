@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nuxt UI Forms"
+  short_description: "Implement consistent Nuxt UI form patterns"
+  default_prompt: "Use $nuxt-ui-forms to implement a Nuxt UI form with schema validation and toast feedback."

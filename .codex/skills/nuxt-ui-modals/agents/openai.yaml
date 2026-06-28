@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nuxt UI Modals"
+  short_description: "Implement consistent Nuxt UI modal patterns"
+  default_prompt: "Use $nuxt-ui-modals to implement a Nuxt UI modal with controlled open state and save behavior."

@@ -16,16 +16,20 @@ const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
 const formData = reactive<CreditCardBalanceFormData>({
-  date: getToday(),
-  balance: undefined
+  date: null,
+  balance: null
 })
 
-const minDate = computed(() => selectedCreditCard.value ? parseApiDate(selectedCreditCard.value.startDate) : null)
+const minDate = computed(() => selectedCreditCard.value ? parseApiDate(selectedCreditCard.value.startDate) || getToday() : getToday())
 const formSchema = computed(() => z.object({
-  date: minDate.value
-    ? z.date('Balance date is required.').min(minDate.value, 'Balance date must be on or after the start date.')
-    : z.date('Balance date is required.'),
-  balance: z.number('Balance is required.').min(0, 'Balance must be zero or greater.')
+  date: z.preprocess(
+    value => value === null ? undefined : value,
+    z.date('Balance date is required.').min(minDate.value, 'Balance date must be on or after the start date.')
+  ),
+  balance: z.preprocess(
+    value => value === null ? undefined : value,
+    z.number('Balance is required.').min(0, 'Balance must be zero or greater.')
+  )
 }))
 
 const canSubmit = computed(() => Boolean(selectedCreditCard.value && !isSaving.value))
@@ -74,14 +78,21 @@ async function save(event: CreditCardBalanceSubmitEvent) {
 }
 
 function resetForm(creditCard?: CreditCard) {
-  formData.date = getToday()
+  formData.date = creditCard ? getDefaultBalanceDate(creditCard) : null
   formData.balance = creditCard?.currentBalance === null || creditCard?.currentBalance === undefined
-    ? undefined
+    ? null
     : creditCard.currentBalance
 }
 
+function getDefaultBalanceDate(creditCard: CreditCard) {
+  const today = getToday()
+  const startDate = parseApiDate(creditCard.startDate) || today
+
+  return startDate > today ? startDate : today
+}
+
 function updateBalance(value: string | number) {
-  formData.balance = value === '' ? undefined : Number(value)
+  formData.balance = value === '' ? null : Number(value)
 }
 
 defineExpose({
