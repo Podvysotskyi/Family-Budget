@@ -1,0 +1,4 @@
+interface:
+  display_name: "Nuxt App Types"
+  short_description: "Create and organize Nuxt app TypeScript types."
+  default_prompt: "Use this skill when adding or moving TypeScript types in apps/web/app/types."

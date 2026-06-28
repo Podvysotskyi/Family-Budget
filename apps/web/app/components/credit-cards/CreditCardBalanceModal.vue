@@ -50,6 +50,13 @@ function close(force = false) {
   }
 
   isOpen.value = false
+}
+
+function handleClose() {
+  if (isOpen.value) {
+    return
+  }
+
   selectedCreditCard.value = null
   resetForm()
 }
@@ -103,6 +110,7 @@ defineExpose({
     title="Edit balance"
     :close="false"
     :dismissible="false"
+    @close="handleClose"
     @update:open="(value: boolean) => !value && close()"
   >
     <template #body>

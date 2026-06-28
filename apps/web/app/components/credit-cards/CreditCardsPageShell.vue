@@ -3,7 +3,8 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 import type { CreditCard } from '~/types/credit-cards'
 import CreditCardBalanceModal from '~/components/credit-cards/CreditCardBalanceModal.vue'
 import CreditCardCloseModal from '~/components/credit-cards/CreditCardCloseModal.vue'
-import CreditCardFormModal from '~/components/credit-cards/CreditCardFormModal.vue'
+import CreditCardCreateModal from '~/components/credit-cards/CreditCardCreateModal.vue'
+import CreditCardEditModal from '~/components/credit-cards/CreditCardEditModal.vue'
 
 defineOptions({
   name: 'CreditCardsPageShell'
@@ -27,7 +28,8 @@ const assignmentFilter = ref(getDefaultAssignmentFilter())
 const showOnlyActiveCreditCards = ref(true)
 const creditCardBalanceModal = ref<InstanceType<typeof CreditCardBalanceModal> | null>(null)
 const creditCardCloseModal = ref<InstanceType<typeof CreditCardCloseModal> | null>(null)
-const creditCardFormModal = ref<InstanceType<typeof CreditCardFormModal> | null>(null)
+const creditCardCreateModal = ref<InstanceType<typeof CreditCardCreateModal> | null>(null)
+const creditCardEditModal = ref<InstanceType<typeof CreditCardEditModal> | null>(null)
 const hasMultipleMembers = computed(() => members.value.length > 1)
 const creditCardNavigationItems = computed<NavigationMenuItem[]>(() => {
   return [
@@ -109,7 +111,7 @@ function startCreatingCreditCard() {
     return
   }
 
-  creditCardFormModal.value?.openCreate(getCreditCardFormContext())
+  creditCardCreateModal.value?.open(getCreditCardCreateFormContext())
 }
 
 function startEditingCreditCard(creditCard: CreditCard) {
@@ -117,7 +119,7 @@ function startEditingCreditCard(creditCard: CreditCard) {
     return
   }
 
-  creditCardFormModal.value?.openEdit(creditCard, getCreditCardFormContext())
+  creditCardEditModal.value?.open(creditCard, getCreditCardEditFormContext())
 }
 
 function startDeletingCreditCard(creditCard: CreditCard) {
@@ -162,11 +164,20 @@ function getDefaultCreateCreditCardUserId() {
   return dashboardStore.user?.id || householdAssignmentValue
 }
 
-function getCreditCardFormContext() {
+function getCreditCardCreateFormContext() {
   return {
     assignmentOptions: assignmentOptions.value,
     currentUserId: dashboardStore.user?.id || '',
     defaultUserId: getDefaultCreateCreditCardUserId(),
+    hasMultipleMembers: hasMultipleMembers.value,
+    householdId: householdId.value
+  }
+}
+
+function getCreditCardEditFormContext() {
+  return {
+    assignmentOptions: assignmentOptions.value,
+    currentUserId: dashboardStore.user?.id || '',
     hasMultipleMembers: hasMultipleMembers.value,
     householdId: householdId.value
   }
@@ -380,7 +391,9 @@ function buildCreditCardAssignmentPath(assignment: string) {
       </div>
     </section>
 
-    <CreditCardFormModal ref="creditCardFormModal" />
+    <CreditCardCreateModal ref="creditCardCreateModal" />
+
+    <CreditCardEditModal ref="creditCardEditModal" />
 
     <CreditCardBalanceModal ref="creditCardBalanceModal" />
 

@@ -54,7 +54,9 @@ function startEditingItem(item: Item) {
 - Implement a single `close(force = false)` function.
 - Block user-triggered close while saving.
 - Use `close(true)` after successful save if normal close is blocked during saving.
-- Reset selected item and form state inside `close`.
+- Keep `close()` focused on guard checks and setting `isOpen.value = false`.
+- Reset selected item, modal context, and form state from a `handleClose()` function wired to `UModal @close`.
+- Initialize form state inside `open(...)` after setting selected item or modal context and before setting `isOpen.value = true`.
 
 ```ts
 function close(force = false) {
@@ -63,6 +65,13 @@ function close(force = false) {
   }
 
   isOpen.value = false
+}
+
+function handleClose() {
+  if (isOpen.value) {
+    return
+  }
+
   selectedItem.value = null
   resetForm()
 }
@@ -80,6 +89,7 @@ function close(force = false) {
   title="Edit item"
   :close="false"
   :dismissible="false"
+  @close="handleClose"
   @update:open="(value: boolean) => !value && close()"
 >
 ```
