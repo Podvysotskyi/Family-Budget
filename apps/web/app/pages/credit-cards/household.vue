@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import SubscriptionsPageShell from '~/components/subscriptions/SubscriptionsPageShell.vue'
+import CreditCardsPageShell from '~/components/credit-cards/CreditCardsPageShell.vue'
 
 defineOptions({
-  name: 'HouseholdSubscriptionsPage'
+  name: 'HouseholdCreditCardsPage'
 })
 
 definePageMeta({
@@ -14,10 +14,10 @@ const dashboardStore = useDashboardStore()
 await dashboardStore.fetchDashboard()
 
 if (dashboardStore.members.length <= 1) {
-  await navigateTo('/subscriptions')
+  await navigateTo('/credit-cards')
 }
 </script>
 
 <template>
-  <SubscriptionsPageShell subscription-user-id="household" />
+  <CreditCardsPageShell credit-card-user-id="household" />
 </template>

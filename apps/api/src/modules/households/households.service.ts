@@ -7,6 +7,8 @@ import { buildBudgetInputsForMonth } from '../budgets/budget-windows'
 import { BudgetsRepository, sortBudgetPeriods, toBudgetPeriod } from '../budgets/budgets.repository'
 import { BudgetType } from '../budgets/entities/budget-type'
 import { CreditCardsRepository } from '../credit-cards/credit-cards.repository'
+import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card.dto'
+import type { SaveCreditCardBalanceDto } from '../credit-cards/dto/save-credit-card-balance.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { CreditCardEntity } from '../credit-cards/entities/credit-card.entity'
 import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
@@ -547,29 +549,6 @@ export class HouseholdService {
     }
   }
 
-  async deleteSubscription(householdId: string, userId: string, subscriptionId: string) {
-    await this.requireHouseholdUser(householdId, userId)
-    const subscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, householdId)
-
-    if (!subscription) {
-      throw new NotFoundException('Subscription not found')
-    }
-
-    if (await this.subscriptionsRepository.hasTransactions(subscription.id)) {
-      throw new BadRequestException('Subscriptions with transactions cannot be deleted')
-    }
-
-    const deleted = await this.subscriptionsRepository.delete(householdId, subscriptionId)
-
-    if (!deleted) {
-      throw new NotFoundException('Subscription not found')
-    }
-
-    return {
-      deleted: true
-    }
-  }
-
   async listCreditCards(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const creditCards = await this.creditCardsRepository.listByHouseholdId(householdId)
@@ -591,19 +570,19 @@ export class HouseholdService {
       throw new ForbiddenException('Credit cards can only be created for current user or household')
     }
 
-    const startDate = getCreditCardStartDate(input)
-    const endDate = getCreditCardEndDate(input, startDate)
+    const dueDate = getCreditCardDueDate(input)
+    const startDate = getCreditCardCreateStartDate(dueDate)
     const creditCard = await this.creditCardsRepository.create(
       {
         householdId,
         name: getCreditCardName(input),
         userId: creditCardUserId,
         startDate,
-        endDate,
-        dueDate: getCreditCardDueDate(input)
+        endDate: null,
+        dueDate
       },
       {
-        date: getCreditCardLimitEffectiveDate(input),
+        date: startDate,
         limit: getCreditCardLimit(input)
       }
     )
@@ -625,6 +604,10 @@ export class HouseholdService {
       throw new NotFoundException('Credit card not found')
     }
 
+    if (currentCreditCard.endDate) {
+      throw new BadRequestException('Canceled credit cards cannot be edited')
+    }
+
     const creditCardUserId = await this.getCreditCardUserId(householdId, input)
 
     if (creditCardUserId && creditCardUserId !== userId) {
@@ -632,7 +615,7 @@ export class HouseholdService {
     }
 
     const startDate = getCreditCardStartDate(input)
-    const endDate = getCreditCardEndDate(input, startDate)
+
     const creditCard = await this.creditCardsRepository.update(
       householdId,
       creditCardId,
@@ -640,11 +623,11 @@ export class HouseholdService {
         name: getCreditCardName(input),
         userId: creditCardUserId,
         startDate,
-        endDate,
+        endDate: null,
         dueDate: getCreditCardDueDate(input)
       },
       {
-        date: getCreditCardLimitEffectiveDate(input),
+        date: startDate,
         limit: getCreditCardLimit(input)
       }
     )
@@ -658,7 +641,7 @@ export class HouseholdService {
     }
   }
 
-  async deleteCreditCard(householdId: string, userId: string, creditCardId: string) {
+  async cancelCreditCard(householdId: string, userId: string, creditCardId: string, input: CancelCreditCardDto) {
     await this.requireHouseholdUser(householdId, userId)
     const creditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
 
@@ -666,10 +649,42 @@ export class HouseholdService {
       throw new NotFoundException('Credit card not found')
     }
 
-    await this.creditCardsRepository.end(householdId, creditCardId, getCurrentDateKey())
+    if (creditCard.endDate) {
+      throw new BadRequestException('Credit card is already canceled')
+    }
+
+    await this.creditCardsRepository.cancel(
+      householdId,
+      creditCardId,
+      getCreditCardCancellationDate(input, creditCard.startDate)
+    )
 
     return {
-      deleted: true
+      canceled: true
+    }
+  }
+
+  async saveCreditCardBalance(householdId: string, userId: string, creditCardId: string, input: SaveCreditCardBalanceDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const creditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
+
+    if (!creditCard || (creditCard.userId && creditCard.userId !== userId)) {
+      throw new NotFoundException('Credit card not found')
+    }
+
+    if (creditCard.endDate) {
+      throw new BadRequestException('Canceled credit cards cannot be edited')
+    }
+
+    const balanceDate = getCreditCardBalanceDate(input, creditCard.startDate)
+    const balance = await this.creditCardsRepository.saveBalance({
+      creditCardId,
+      date: balanceDate,
+      balance: getCreditCardBalance(input)
+    })
+
+    return {
+      balance
     }
   }
 
@@ -1121,24 +1136,6 @@ function getCreditCardStartDate(input: SaveCreditCardDto) {
   return startDate
 }
 
-function getCreditCardEndDate(input: SaveCreditCardDto, startDate: string) {
-  const endDate = typeof input?.endDate === 'string' && input.endDate ? input.endDate : null
-
-  if (!endDate) {
-    return null
-  }
-
-  if (!isDateString(endDate)) {
-    throw new BadRequestException('Credit card end date must be in YYYY-MM-DD format')
-  }
-
-  if (endDate < startDate) {
-    throw new BadRequestException('Credit card end date must be on or after the start date')
-  }
-
-  return endDate
-}
-
 function getCreditCardDueDate(input: SaveCreditCardDto) {
   const dueDate = typeof input?.dueDate === 'string' ? input.dueDate : ''
 
@@ -1149,14 +1146,24 @@ function getCreditCardDueDate(input: SaveCreditCardDto) {
   return dueDate
 }
 
-function getCreditCardLimitEffectiveDate(input: SaveCreditCardDto) {
-  const limitEffectiveDate = typeof input?.limitEffectiveDate === 'string' ? input.limitEffectiveDate : ''
+function getCreditCardCancellationDate(input: CancelCreditCardDto, startDate: string) {
+  const effectiveDate = typeof input?.effectiveDate === 'string' ? input.effectiveDate : ''
 
-  if (!isDateString(limitEffectiveDate)) {
-    throw new BadRequestException('Credit card limit effective date must be in YYYY-MM-DD format')
+  if (!isDateString(effectiveDate)) {
+    throw new BadRequestException('Credit card cancellation effective date must be in YYYY-MM-DD format')
   }
 
-  return limitEffectiveDate
+  if (effectiveDate < startDate) {
+    throw new BadRequestException('Credit card cancellation effective date must be on or after the start date')
+  }
+
+  return effectiveDate
+}
+
+function getCreditCardCreateStartDate(dueDate: string) {
+  const today = getCurrentDateKey()
+
+  return dueDate < today ? dueDate : today
 }
 
 function getCreditCardLimit(input: SaveCreditCardDto) {
@@ -1167,6 +1174,34 @@ function getCreditCardLimit(input: SaveCreditCardDto) {
   }
 
   return limit
+}
+
+function getCreditCardBalanceDate(input: SaveCreditCardBalanceDto, startDate: string) {
+  const balanceDate = typeof input?.date === 'string' ? input.date : ''
+
+  if (!isDateString(balanceDate)) {
+    throw new BadRequestException('Credit card balance date must be in YYYY-MM-DD format')
+  }
+
+  if (balanceDate < startDate) {
+    throw new BadRequestException('Credit card balance date must be on or after the start date')
+  }
+
+  if (balanceDate > getCurrentDateKey()) {
+    throw new BadRequestException('Credit card balance date cannot be in the future')
+  }
+
+  return balanceDate
+}
+
+function getCreditCardBalance(input: SaveCreditCardBalanceDto) {
+  const balance = Number(input?.balance)
+
+  if (!Number.isFinite(balance) || balance < 0) {
+    throw new BadRequestException('Credit card balance must be zero or greater')
+  }
+
+  return balance
 }
 
 function getGoalName(input: SaveGoalDto) {
@@ -1327,7 +1362,15 @@ function toCreditCard(creditCard: CreditCardEntity, assignedUser: HouseholdMembe
     startDate: creditCard.startDate,
     endDate: creditCard.endDate,
     dueDate: creditCard.dueDate,
+    currentBalance: getCreditCardBalanceForDate(creditCard, getCurrentDateKey()),
     currentLimit: getCreditCardLimitForDate(creditCard, getCurrentDateKey()),
+    balances: [...(creditCard.balances || [])]
+      .sort((first, second) => second.date.localeCompare(first.date))
+      .map(balance => ({
+        id: balance.id,
+        date: balance.date,
+        balance: balance.balance
+      })),
     limits: sortedLimits.map(limit => ({
       id: limit.id,
       date: limit.date,
@@ -1351,6 +1394,21 @@ function getCreditCardLimitForDate(creditCard: CreditCardEntity, date: string) {
   }
 
   return effectiveLimit ?? sortedLimits[0]?.limit ?? null
+}
+
+function getCreditCardBalanceForDate(creditCard: CreditCardEntity, date: string) {
+  const sortedBalances = [...(creditCard.balances || [])].sort((first, second) => first.date.localeCompare(second.date))
+  let effectiveBalance: number | null = null
+
+  for (const balance of sortedBalances) {
+    if (balance.date > date) {
+      break
+    }
+
+    effectiveBalance = balance.balance
+  }
+
+  return effectiveBalance ?? sortedBalances[0]?.balance ?? null
 }
 
 function toBudgetSubscriptions(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {

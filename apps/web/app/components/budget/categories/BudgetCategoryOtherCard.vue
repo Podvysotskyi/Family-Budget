@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BudgetCategory } from '~/stores/budget-categories'
+import type { BudgetCategory } from '~/types/budget-categories'
 
 defineOptions({
   name: 'BudgetCategoryOtherCard'

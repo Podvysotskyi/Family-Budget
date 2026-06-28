@@ -32,9 +32,9 @@ Stores limit history:
 - `created_at`
 - `updated_at`
 
-`credit_card_id` and `date` are unique together. This means a credit card can only have one limit record for a given effective date.
+`credit_card_id` and `date` are unique together. This means a credit card can only have one limit record for a given date.
 
-When a user changes a card limit, the API writes a limit record with the requested effective date. If the limit is changed multiple times for the same card and same effective date, the existing row is updated instead of creating another row.
+When a user changes a card limit, the API writes a limit record for the card `start_date`. If the limit is changed multiple times for the same card and same date, the existing row is updated instead of creating another row.
 
 When the app needs the current card limit, it uses the latest limit record whose `date` is on or before the current date. If no prior limit exists, it falls back to the earliest limit record.
 
@@ -55,35 +55,46 @@ Stores balance history:
 When a credit card is created:
 
 1. A `credit_cards` row is created.
-2. An initial `credit_card_limits` row is upserted using the submitted limit effective date.
-3. The created card is returned with its user assignment and limit history.
+2. `end_date` is set to null.
+3. `start_date` is derived as the earlier of the current date and the submitted `due_date`.
+4. An initial `credit_card_limits` row is upserted using the derived `start_date`.
+5. The created card is returned with its user assignment and limit history.
 
 The API validates:
 
 - the current user belongs to the household
 - the card name is present
 - dates use `YYYY-MM-DD`
-- `end_date`, when present, is on or after `start_date`
 - the limit is greater than zero
 - user-assigned cards can only be assigned to the current user
 
 ## Updating Credit Cards
 
-When a credit card is updated:
+Only active credit cards can be edited. A canceled credit card is any card with `end_date` set.
+
+When an active credit card is updated:
 
 1. Card metadata is updated on the `credit_cards` row.
-2. A `credit_card_limits` row is upserted for the submitted limit effective date.
+2. A `credit_card_limits` row is upserted for the card `start_date`.
 3. The updated card is returned with its user assignment and limit history.
 
-Updating a limit does not overwrite older limit records with different dates. This keeps historical limit changes available while preventing duplicate rows for the same card and effective date.
+Updating a limit does not overwrite older limit records with different dates. This keeps historical limit changes available while preventing duplicate rows for the same card and date.
 
-## Closing Credit Cards
+The edit form does not expose `start_date` or `end_date`. Canceled cards do not show the edit action, and the API rejects direct update requests for canceled cards.
 
-Deleting a credit card from the UI does not delete the database row.
+## Canceling Credit Cards
 
-The `DELETE /households/:id/credit-cards/:creditCardId` endpoint closes the card by setting `credit_cards.end_date` to the current date. This preserves card history, limit history, and balance history.
+Credit cards are canceled instead of deleted from the normal UI flow.
 
-The current date comes from `SCHEDULING_TIMEZONE`, defaulting to `America/Chicago`.
+The `PATCH /households/:id/credit-cards/:creditCardId/cancel` endpoint accepts an `effectiveDate`.
+
+When a credit card is canceled:
+
+1. `credit_cards.end_date` is set to the effective date.
+2. `credit_card_limits` rows after the effective date are removed.
+3. `credit_card_balances` rows after the effective date are removed.
+
+The effective date must be on or after the card `start_date`. Already canceled cards cannot be canceled again.
 
 ## Listing Credit Cards
 
@@ -94,7 +105,7 @@ The API returns cards that are either:
 - assigned to the household
 - assigned to the current user
 
-The frontend can filter the returned list to active cards. A card is considered active when `end_date` is null or `end_date` is today or later.
+The frontend can filter the returned list to active cards. A card is considered active only when `end_date` is null. Any card with `end_date` set is treated as canceled, even if the date is today or in the future.
 
 Each returned card includes:
 
@@ -109,12 +120,15 @@ Each returned card includes:
 The `/credit-cards` page supports:
 
 - creating a card
-- editing card metadata
-- changing a card limit with an effective date
-- closing a card
+- switching between household and member cards
+- editing active card metadata
+- changing an active card limit
+- canceling an active card with an effective date
 - showing active cards only
 
-The close confirmation tells the user that the action sets the card end date and keeps historical records intact.
+The create form asks for a due date, not a start date. The API derives the card start date from the due date and current date.
+
+Canceled cards show a `Canceled` label. Canceled cards do not show edit or cancel actions.
 
 ## Timezone
 
@@ -122,7 +136,7 @@ Current-date behavior uses `SCHEDULING_TIMEZONE`, defaulting to `America/Chicago
 
 This affects:
 
-- the date used when closing a card
+- the derived start date used when creating a card
 - the date used when calculating `currentLimit`
 
-Limit effective dates submitted by the user are stored as date-only values and are not converted between timezones.
+Card due dates, start dates, end dates, and limit dates are stored as date-only values and are not converted between timezones.

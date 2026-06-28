@@ -1,10 +1,10 @@
 import { Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from 'typeorm'
 import { SubscriptionEntity } from './subscription.entity'
 
-@Entity({ name: 'subscription_dates' })
-@Index('subscription_dates_subscription_id_idx', ['subscriptionId'])
-@Index('subscription_dates_date_idx', ['date'])
-export class SubscriptionDateEntity {
+@Entity({ name: 'subscription_due_dates' })
+@Index('subscription_due_dates_subscription_id_idx', ['subscriptionId'])
+@Index('subscription_due_dates_date_idx', ['date'])
+export class SubscriptionDueDateEntity {
   @PrimaryColumn({ name: 'subscription_id', type: 'uuid' })
   subscriptionId!: string
 

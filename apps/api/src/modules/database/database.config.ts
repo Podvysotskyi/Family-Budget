@@ -11,7 +11,7 @@ import { HouseholdEntity } from '../households/entities/household.entity'
 import { IncomeEntity } from '../income/entities/income.entity'
 import { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { SubscriptionAmountEntity } from '../subscriptions/entities/subscription-amount.entity'
-import { SubscriptionDateEntity } from '../subscriptions/entities/subscription-date.entity'
+import { SubscriptionDueDateEntity } from '../subscriptions/entities/subscription-due-date.entity'
 import { SubscriptionTransactionEntity } from '../subscriptions/entities/subscription-transaction.entity'
 import { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
 import { UserEntity } from '../users/entities/user.entity'
@@ -30,7 +30,7 @@ export const databaseEntities = [
   IncomeEntity,
   IncomeTypeEntity,
   SubscriptionAmountEntity,
-  SubscriptionDateEntity,
+  SubscriptionDueDateEntity,
   SubscriptionEntity,
   SubscriptionTransactionEntity,
   UserEntity

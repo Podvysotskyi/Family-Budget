@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { Goal, GoalTargetType } from '~/stores/goals'
+import type { Goal, GoalTargetType } from '~/types/goals'
+import GoalCloseModal from '~/components/goals/GoalCloseModal.vue'
+import GoalDeleteModal from '~/components/goals/GoalDeleteModal.vue'
+import GoalFormModal from '~/components/goals/GoalFormModal.vue'
 
 defineOptions({
   name: 'GoalsPageShell'
@@ -8,6 +11,7 @@ defineOptions({
 const householdAssignmentValue = 'household'
 const dashboardStore = useDashboardStore()
 const goalsStore = useGoalsStore()
+const { getTodayDate } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const goals = computed(() => goalsStore.getGoals(householdId.value))
@@ -337,14 +341,6 @@ function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-function getTodayDate() {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
 </script>
 
 <template>

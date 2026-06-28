@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common'
 import { TypeOrmModule } from '@nestjs/typeorm'
 import { SubscriptionAmountEntity } from './entities/subscription-amount.entity'
-import { SubscriptionDateEntity } from './entities/subscription-date.entity'
+import { SubscriptionDueDateEntity } from './entities/subscription-due-date.entity'
 import { SubscriptionTransactionEntity } from './entities/subscription-transaction.entity'
 import { SubscriptionEntity } from './entities/subscription.entity'
 import { SubscriptionsRepository } from './subscriptions.repository'
@@ -10,7 +10,7 @@ import { SubscriptionsRepository } from './subscriptions.repository'
   imports: [
     TypeOrmModule.forFeature([
       SubscriptionAmountEntity,
-      SubscriptionDateEntity,
+      SubscriptionDueDateEntity,
       SubscriptionTransactionEntity,
       SubscriptionEntity
     ])

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { BudgetCategory } from '~/stores/budget-categories'
+import type { BudgetCategory } from '~/types/budget-categories'
+import ConfirmationModal from '~/components/shared/ConfirmationModal.vue'
 
 defineOptions({
   name: 'BudgetCategoriesSettingsPage'

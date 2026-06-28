@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { SubscriptionType } from '~/stores/subscriptions'
+import type { SubscriptionType } from '~/types/subscriptions'
+import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
 type SelectOption = { label: string, value: string }
 
@@ -15,6 +16,8 @@ const props = defineProps<{
   hasHousehold: boolean
   formError: string | null
   typeOptions: SelectOption[]
+  endDateMin?: string
+  nextChargeDateMax?: string
   canSave: boolean
 }>()
 
@@ -94,7 +97,10 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
           />
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div
+          v-if="!isEditing"
+          class="grid gap-4 sm:grid-cols-2"
+        >
           <div class="space-y-2">
             <label
               for="subscription-start-date"
@@ -123,6 +129,7 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
               empty-label="No end date"
               clearable
               clear-aria-label="Clear end date"
+              :min="endDateMin"
               :disabled="isDisabled"
             />
           </div>
@@ -136,12 +143,14 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
             for="subscription-next-charge-date"
             class="text-sm font-medium text-highlighted"
           >
-            Next charge date
+            Next due date
           </label>
           <AppDatePicker
             id="subscription-next-charge-date"
             v-model="subscriptionNextChargeDate"
-            empty-label="Select next charge date"
+            empty-label="Select next due date"
+            :min="subscriptionStartDate"
+            :max="nextChargeDateMax"
             :disabled="isDisabled"
           />
         </div>

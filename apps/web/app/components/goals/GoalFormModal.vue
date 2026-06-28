@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { GoalTargetType } from '~/stores/goals'
+import type { GoalTargetType } from '~/types/goals'
+import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
 type SelectOption = { label: string, value: string }
 

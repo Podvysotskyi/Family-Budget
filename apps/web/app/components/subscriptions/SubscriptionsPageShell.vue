@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
-import type { Subscription, SubscriptionType } from '~/stores/subscriptions'
+import type { Subscription, SubscriptionType } from '~/types/subscriptions'
+import SubscriptionCancellationModal from '~/components/subscriptions/SubscriptionCancellationModal.vue'
+import SubscriptionFormModal from '~/components/subscriptions/SubscriptionFormModal.vue'
 
 defineOptions({
   name: 'SubscriptionsPageShell'
@@ -14,6 +16,7 @@ const unassignedUserValue = 'household'
 const allSubscriptionsValue = 'all'
 const dashboardStore = useDashboardStore()
 const subscriptionsStore = useSubscriptionsStore()
+const { getTodayDate } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const members = computed(() => dashboardStore.members)
@@ -26,9 +29,6 @@ const subscriptionPendingCancel = ref<Subscription | null>(null)
 const cancelingSubscriptionId = ref<string | null>(null)
 const cancellationEffectiveDate = ref(getTodayDate())
 const cancellationError = ref<string | null>(null)
-const subscriptionPendingDelete = ref<Subscription | null>(null)
-const deletingSubscriptionId = ref<string | null>(null)
-const deletionError = ref<string | null>(null)
 const editingSubscriptionId = ref<string | null>(null)
 const formError = ref<string | null>(null)
 const isSubscriptionModalOpen = ref(false)
@@ -73,6 +73,9 @@ const subscriptionNavigationItems = computed<NavigationMenuItem[]>(() => {
 const trimmedSubscriptionName = computed(() => subscriptionName.value.trim())
 const isEditingSubscription = computed(() => Boolean(editingSubscriptionId.value))
 const parsedSubscriptionAmount = computed(() => Number(subscriptionAmount.value))
+const subscriptionEndDateMin = computed(() => subscriptionStartDate.value || undefined)
+const subscriptionNextChargeDateMax = computed(() => isEditingSubscription.value && subscriptionEndDate.value ? subscriptionEndDate.value : undefined)
+const subscriptionCancellationDateMin = computed(() => subscriptionPendingCancel.value?.startDate || '')
 const canSaveSubscription = computed(() => {
   return Boolean(
     !pending.value
@@ -167,6 +170,10 @@ function setSubscriptionModalOpen(open: boolean) {
 }
 
 function startEditingSubscription(subscription: Subscription) {
+  if (subscription.endDate) {
+    return
+  }
+
   formError.value = null
   editingSubscriptionId.value = subscription.id
   subscriptionName.value = subscription.name
@@ -185,6 +192,10 @@ function startEditingSubscription(subscription: Subscription) {
 }
 
 function startCancelingSubscription(subscription: Subscription) {
+  if (subscription.endDate) {
+    return
+  }
+
   cancellationError.value = null
   cancellationEffectiveDate.value = getTodayDate()
   subscriptionPendingCancel.value = subscription
@@ -194,16 +205,6 @@ function closeCancellationModal() {
   subscriptionPendingCancel.value = null
   cancellationError.value = null
   cancellationEffectiveDate.value = getTodayDate()
-}
-
-function startDeletingSubscription(subscription: Subscription) {
-  deletionError.value = null
-  subscriptionPendingDelete.value = subscription
-}
-
-function closeDeletionModal() {
-  subscriptionPendingDelete.value = null
-  deletionError.value = null
 }
 
 async function saveSubscription() {
@@ -230,17 +231,17 @@ async function saveSubscription() {
   }
 
   if (isEditingSubscription.value && !subscriptionNextChargeDate.value) {
-    formError.value = 'Next charge date is required.'
+    formError.value = 'Next due date is required.'
     return
   }
 
   if (isEditingSubscription.value && subscriptionNextChargeDate.value < subscriptionStartDate.value) {
-    formError.value = 'Next charge date must be on or after the start date.'
+    formError.value = 'Next due date must be on or after the start date.'
     return
   }
 
   if (isEditingSubscription.value && subscriptionEndDate.value && subscriptionNextChargeDate.value > subscriptionEndDate.value) {
-    formError.value = 'Next charge date must be on or before the end date.'
+    formError.value = 'Next due date must be on or before the end date.'
     return
   }
 
@@ -304,6 +305,11 @@ async function cancelSubscription() {
     return
   }
 
+  if (subscriptionPendingCancel.value.endDate) {
+    cancellationError.value = 'Subscription is already canceled.'
+    return
+  }
+
   cancelingSubscriptionId.value = subscriptionPendingCancel.value.id
 
   try {
@@ -321,30 +327,6 @@ async function cancelSubscription() {
     cancellationError.value = 'Subscription could not be canceled.'
   } finally {
     cancelingSubscriptionId.value = null
-  }
-}
-
-async function deleteSubscription() {
-  deletionError.value = null
-
-  if (!subscriptionPendingDelete.value) {
-    return
-  }
-
-  if (!householdId.value) {
-    deletionError.value = 'Household is required.'
-    return
-  }
-
-  deletingSubscriptionId.value = subscriptionPendingDelete.value.id
-
-  try {
-    await subscriptionsStore.deleteSubscription(householdId.value, subscriptionPendingDelete.value.id)
-    closeDeletionModal()
-  } catch {
-    deletionError.value = 'Subscription could not be deleted. Subscriptions with paid transactions cannot be deleted.'
-  } finally {
-    deletingSubscriptionId.value = null
   }
 }
 
@@ -386,9 +368,7 @@ function formatCurrency(value: number) {
 }
 
 function isActiveSubscription(subscription: Subscription) {
-  const today = getTodayDate()
-
-  return !subscription.endDate || subscription.endDate >= today
+  return !subscription.endDate
 }
 
 function isExpiredSubscription(subscription: Subscription) {
@@ -423,14 +403,6 @@ function formatDate(value: string | null) {
   })
 }
 
-function getTodayDate() {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
 </script>
 
 <template>
@@ -523,9 +495,21 @@ function getTodayDate() {
                 variant="subtle"
                 label="Expired"
               />
+              <UBadge
+                v-if="subscription.endDate"
+                color="warning"
+                variant="subtle"
+                label="Canceled"
+              />
             </div>
             <p class="mt-1 text-sm text-muted">
-              {{ getSubscriptionAssignmentLabel(subscription) }} · {{ formatCurrency(subscription.amount) }} · {{ formatDate(subscription.startDate) }} - {{ formatDate(subscription.endDate) }}
+              {{ getSubscriptionAssignmentLabel(subscription) }} · {{ formatCurrency(subscription.amount) }}
+            </p>
+            <p
+              v-if="subscription.endDate"
+              class="mt-1 text-sm text-muted"
+            >
+              Canceled {{ formatDate(subscription.endDate) }}
             </p>
             <p
               v-if="subscription.nextChargeDate"
@@ -537,28 +521,22 @@ function getTodayDate() {
 
           <div class="flex items-center gap-1">
             <UButton
+              v-if="!subscription.endDate"
               icon="i-lucide-pencil"
               color="neutral"
               variant="ghost"
               aria-label="Edit subscription"
-              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
+              :disabled="cancelingSubscriptionId === subscription.id"
               @click="startEditingSubscription(subscription)"
             />
             <UButton
+              v-if="!subscription.endDate"
               icon="i-lucide-ban"
               color="warning"
               variant="ghost"
               aria-label="Cancel subscription"
-              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
+              :disabled="cancelingSubscriptionId === subscription.id"
               @click="startCancelingSubscription(subscription)"
-            />
-            <UButton
-              icon="i-lucide-trash-2"
-              color="error"
-              variant="ghost"
-              aria-label="Delete subscription"
-              :disabled="cancelingSubscriptionId === subscription.id || deletingSubscriptionId === subscription.id"
-              @click="startDeletingSubscription(subscription)"
             />
           </div>
         </div>
@@ -587,6 +565,8 @@ function getTodayDate() {
       :has-household="Boolean(householdId)"
       :form-error="formError"
       :type-options="typeOptions"
+      :end-date-min="subscriptionEndDateMin"
+      :next-charge-date-max="subscriptionNextChargeDateMax"
       :can-save="canSaveSubscription"
       @update:open="setSubscriptionModalOpen"
       @cancel="closeSubscriptionModal"
@@ -599,18 +579,11 @@ function getTodayDate() {
       :subscription-name="subscriptionPendingCancel?.name || ''"
       :is-canceling="Boolean(cancelingSubscriptionId)"
       :error="cancellationError"
+      :min-date="subscriptionCancellationDateMin"
       @update:open="(value: boolean) => !value && closeCancellationModal()"
       @keep="closeCancellationModal"
       @cancel-subscription="cancelSubscription"
     />
 
-    <SubscriptionDeleteModal
-      :open="Boolean(subscriptionPendingDelete)"
-      :subscription-name="subscriptionPendingDelete?.name || ''"
-      :is-deleting="Boolean(deletingSubscriptionId)"
-      :error="deletionError"
-      @update:open="(value: boolean) => !value && closeDeletionModal()"
-      @confirm="deleteSubscription"
-    />
   </UContainer>
 </template>

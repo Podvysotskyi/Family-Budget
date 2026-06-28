@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SubscriptionsPageShell from '~/components/subscriptions/SubscriptionsPageShell.vue'
+
 defineOptions({
   name: 'UserSubscriptionsPage'
 })

@@ -12,7 +12,7 @@ import {
 import { HouseholdEntity } from '../../households/entities/household.entity'
 import { UserEntity } from '../../users/entities/user.entity'
 import { SubscriptionAmountEntity } from './subscription-amount.entity'
-import { SubscriptionDateEntity } from './subscription-date.entity'
+import { SubscriptionDueDateEntity } from './subscription-due-date.entity'
 import { SubscriptionTransactionEntity } from './subscription-transaction.entity'
 import { SubscriptionType } from './subscription-type'
 
@@ -64,6 +64,6 @@ export class SubscriptionEntity {
   @OneToMany(() => SubscriptionAmountEntity, subscriptionAmount => subscriptionAmount.subscription)
   amounts!: SubscriptionAmountEntity[]
 
-  @OneToMany(() => SubscriptionDateEntity, subscriptionDate => subscriptionDate.subscription)
-  dates!: SubscriptionDateEntity[]
+  @OneToMany(() => SubscriptionDueDateEntity, subscriptionDate => subscriptionDate.subscription)
+  dates!: SubscriptionDueDateEntity[]
 }

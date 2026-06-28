@@ -1,8 +1,4 @@
-type AuthUser = {
-  id: string
-  email: string
-  name?: string | null
-}
+import type { AuthUser } from '~/types/auth'
 
 const sessionRequests = new WeakMap<object, Promise<boolean>>()
 

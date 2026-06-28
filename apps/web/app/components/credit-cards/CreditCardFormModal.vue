@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppDatePicker from '~/components/shared/AppDatePicker.vue'
+
 type SelectOption = { label: string, value: string }
 
 defineOptions({
@@ -13,6 +15,7 @@ const props = defineProps<{
   hasHousehold: boolean
   formError: string | null
   assignmentOptions: SelectOption[]
+  dueDateMin?: string
   canSave: boolean
 }>()
 
@@ -24,11 +27,8 @@ const emit = defineEmits<{
 
 const creditCardName = defineModel<string>('name', { required: true })
 const creditCardUserId = defineModel<string>('userId', { required: true })
-const creditCardStartDate = defineModel<string>('startDate', { required: true })
-const creditCardEndDate = defineModel<string>('endDate', { required: true })
 const creditCardDueDate = defineModel<string>('dueDate', { required: true })
-const creditCardLimit = defineModel<string>('limit', { required: true })
-const creditCardLimitEffectiveDate = defineModel<string>('limitEffectiveDate', { required: true })
+const creditCardLimit = defineModel<string | number>('limit', { required: true })
 
 const isDisabled = computed(() => props.pending || props.isSaving || !props.hasHousehold)
 </script>
@@ -76,70 +76,20 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
           />
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-2">
-            <label
-              for="credit-card-start-date"
-              class="text-sm font-medium text-highlighted"
-            >
-              Start date
-            </label>
-            <AppDatePicker
-              id="credit-card-start-date"
-              v-model="creditCardStartDate"
-              empty-label="Select start date"
-              :disabled="isDisabled"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <label
-              for="credit-card-end-date"
-              class="text-sm font-medium text-highlighted"
-            >
-              End date
-            </label>
-            <AppDatePicker
-              id="credit-card-end-date"
-              v-model="creditCardEndDate"
-              empty-label="No end date"
-              clearable
-              clear-aria-label="Clear end date"
-              :disabled="isDisabled"
-            />
-          </div>
-        </div>
-
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-2">
-            <label
-              for="credit-card-due-date"
-              class="text-sm font-medium text-highlighted"
-            >
-              Due date
-            </label>
-            <AppDatePicker
-              id="credit-card-due-date"
-              v-model="creditCardDueDate"
-              empty-label="Select due date"
-              :disabled="isDisabled"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <label
-              for="credit-card-limit-effective-date"
-              class="text-sm font-medium text-highlighted"
-            >
-              Limit effective date
-            </label>
-            <AppDatePicker
-              id="credit-card-limit-effective-date"
-              v-model="creditCardLimitEffectiveDate"
-              empty-label="Select effective date"
-              :disabled="isDisabled"
-            />
-          </div>
+        <div class="space-y-2">
+          <label
+            for="credit-card-due-date"
+            class="text-sm font-medium text-highlighted"
+          >
+            Due date
+          </label>
+          <AppDatePicker
+            id="credit-card-due-date"
+            v-model="creditCardDueDate"
+            empty-label="Select due date"
+            :min="dueDateMin"
+            :disabled="isDisabled"
+          />
         </div>
 
         <div class="space-y-2">
@@ -151,7 +101,7 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
           </label>
           <UInput
             id="credit-card-limit"
-            v-model="creditCardLimit"
+            :model-value="String(creditCardLimit)"
             class="w-full"
             icon="i-lucide-dollar-sign"
             type="number"
@@ -159,6 +109,7 @@ const isDisabled = computed(() => props.pending || props.isSaving || !props.hasH
             step="0.01"
             placeholder="0.00"
             :disabled="isDisabled"
+            @update:model-value="value => creditCardLimit = String(value || '')"
           />
         </div>
 

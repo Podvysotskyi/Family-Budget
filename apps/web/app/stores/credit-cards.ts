@@ -1,38 +1,4 @@
-export type CreditCardLimit = {
-  id: string
-  date: string
-  limit: number
-}
-
-export type CreditCard = {
-  id: string
-  householdId: string
-  name: string
-  userId: string | null
-  user: {
-    userId: string
-    name?: string | null
-    email: string
-    avatarUrl?: string | null
-  } | null
-  startDate: string
-  endDate: string | null
-  dueDate: string
-  currentLimit: number | null
-  limits: CreditCardLimit[]
-  createdAt: string
-  updatedAt: string
-}
-
-export type SaveCreditCardInput = {
-  name: string
-  userId: string | null
-  startDate: string
-  endDate: string | null
-  dueDate: string
-  limit: number
-  limitEffectiveDate: string
-}
+import type { CancelCreditCardInput, CreditCard, SaveCreditCardBalanceInput, SaveCreditCardInput } from '~/types/credit-cards'
 
 export const useCreditCardsStore = defineStore('creditCards', {
   state: () => ({
@@ -91,9 +57,18 @@ export const useCreditCardsStore = defineStore('creditCards', {
       await this.fetchCreditCards(householdId)
     },
 
-    async deleteCreditCard(householdId: string, creditCardId: string) {
-      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}`, {
-        method: 'DELETE'
+    async cancelCreditCard(householdId: string, creditCardId: string, input: CancelCreditCardInput) {
+      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}/cancel`, {
+        method: 'PATCH',
+        body: input
+      })
+      await this.fetchCreditCards(householdId)
+    },
+
+    async saveCreditCardBalance(householdId: string, creditCardId: string, input: SaveCreditCardBalanceInput) {
+      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}/balance`, {
+        method: 'PATCH',
+        body: input
       })
       await this.fetchCreditCards(householdId)
     }

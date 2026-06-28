@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { IncomeType } from '~/stores/income-types'
+import type { IncomeType } from '~/types/income-types'
+import ConfirmationModal from '~/components/shared/ConfirmationModal.vue'
 
 defineOptions({
   name: 'IncomeTypesSettingsPage'

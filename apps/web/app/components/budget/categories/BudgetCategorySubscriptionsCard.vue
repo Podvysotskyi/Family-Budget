@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { BudgetSubscriptionPayment } from '~/stores/budgets'
-import type { BudgetCategory } from '~/stores/budget-categories'
+import type { BudgetCategory } from '~/types/budget-categories'
+import type { BudgetSubscriptionPayment } from '~/types/budgets'
 
 defineOptions({
   name: 'BudgetCategorySubscriptionsCard'

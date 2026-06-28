@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import BudgetPageShell from '~/components/budget/BudgetPageShell.vue'
+
 defineOptions({
   name: 'BudgetUserPage'
 })

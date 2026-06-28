@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
 import { MoreThan, type EntityManager, type SelectQueryBuilder, type Repository } from 'typeorm'
 import { SubscriptionAmountEntity } from './entities/subscription-amount.entity'
-import { SubscriptionDateEntity } from './entities/subscription-date.entity'
+import { SubscriptionDueDateEntity } from './entities/subscription-due-date.entity'
 import { SubscriptionTransactionEntity } from './entities/subscription-transaction.entity'
 import { SubscriptionEntity } from './entities/subscription.entity'
 import { SubscriptionType } from './entities/subscription-type'
@@ -36,8 +36,8 @@ export class SubscriptionsRepository {
   constructor(
     @InjectRepository(SubscriptionEntity)
     private readonly subscriptionsRepository: Repository<SubscriptionEntity>,
-    @InjectRepository(SubscriptionDateEntity)
-    private readonly subscriptionDatesRepository: Repository<SubscriptionDateEntity>,
+    @InjectRepository(SubscriptionDueDateEntity)
+    private readonly subscriptionDatesRepository: Repository<SubscriptionDueDateEntity>,
     @InjectRepository(SubscriptionTransactionEntity)
     private readonly subscriptionTransactionsRepository: Repository<SubscriptionTransactionEntity>
   ) {}
@@ -143,6 +143,7 @@ export class SubscriptionsRepository {
       })
 
       await manager.save(SubscriptionEntity, subscription)
+      await this.normalizeSubscriptionDates(manager, [subscription])
       const shouldUpdateAmount = shouldUpsertSubscriptionAmount(subscription.amounts || [], input.amountEffectiveDate, input.amount)
 
       if (shouldUpdateAmount) {
@@ -169,15 +170,6 @@ export class SubscriptionsRepository {
     })
   }
 
-  async delete(householdId: string, subscriptionId: string) {
-    const result = await this.subscriptionsRepository.delete({
-      id: subscriptionId,
-      householdId
-    })
-
-    return Boolean(result.affected)
-  }
-
   findByIdAndHouseholdId(subscriptionId: string, householdId: string) {
     return this.subscriptionsRepository.findOne({
       where: {
@@ -190,16 +182,6 @@ export class SubscriptionsRepository {
         user: true
       }
     })
-  }
-
-  async hasTransactions(subscriptionId: string) {
-    const count = await this.subscriptionTransactionsRepository.count({
-      where: {
-        subscriptionId
-      }
-    })
-
-    return count > 0
   }
 
   async deleteTransactionsAfterDate(subscriptionId: string, date: string) {
@@ -236,6 +218,7 @@ export class SubscriptionsRepository {
           && (!subscription.endDate || subscription.endDate >= monthStartDate)
       })
 
+      await this.normalizeSubscriptionDates(manager, activeSubscriptions)
       return this.ensureSubscriptionDates(manager, activeSubscriptions, monthEndDate)
     })
   }
@@ -351,7 +334,7 @@ export class SubscriptionsRepository {
     await manager
       .createQueryBuilder()
       .delete()
-      .from(SubscriptionDateEntity)
+      .from(SubscriptionDueDateEntity)
       .where('subscription_id = :subscriptionId', { subscriptionId })
       .andWhere('date >= :periodStartDate', { periodStartDate })
       .andWhere('date <= :periodEndDate', { periodEndDate })
@@ -360,13 +343,35 @@ export class SubscriptionsRepository {
     await manager
       .createQueryBuilder()
       .insert()
-      .into(SubscriptionDateEntity)
+      .into(SubscriptionDueDateEntity)
       .values({
         date,
         subscriptionId
       })
       .orIgnore()
       .execute()
+  }
+
+  private async normalizeSubscriptionDates(manager: EntityManager, subscriptions: SubscriptionEntity[]) {
+    for (const subscription of subscriptions) {
+      const normalizedDates = getNormalizedSubscriptionDates(subscription)
+      const normalizedDatesSet = new Set(normalizedDates)
+      const datesToDelete = [...new Set((subscription.dates || [])
+        .map(subscriptionDate => subscriptionDate.date)
+        .filter(date => !normalizedDatesSet.has(date)))]
+
+      if (datesToDelete.length) {
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(SubscriptionDueDateEntity)
+          .where('subscription_id = :subscriptionId', { subscriptionId: subscription.id })
+          .andWhere('date IN (:...dates)', { dates: datesToDelete })
+          .execute()
+      }
+
+      subscription.dates = normalizedDates.map(date => ({ date, subscriptionId: subscription.id })) as SubscriptionDueDateEntity[]
+    }
   }
 
   private async ensureSubscriptionDates(manager: EntityManager, subscriptions: SubscriptionEntity[], throughDate: string) {
@@ -384,7 +389,7 @@ export class SubscriptionsRepository {
     const result = await manager
       .createQueryBuilder()
       .insert()
-      .into(SubscriptionDateEntity)
+      .into(SubscriptionDueDateEntity)
       .values(values)
       .orIgnore()
       .execute()
@@ -415,7 +420,7 @@ function orderSubscriptionTransactions(query: SelectQueryBuilder<SubscriptionTra
 
 function buildMissingSubscriptionDates(subscription: SubscriptionEntity, throughDate: string) {
   const dates: string[] = []
-  const existingDates = (subscription.dates || []).map(date => date.date).sort()
+  const existingDates = getNormalizedSubscriptionDates(subscription)
   let candidateDate = existingDates.length ? getNextSubscriptionDate(subscription.type, existingDates[existingDates.length - 1]!) : subscription.startDate
 
   while (candidateDate <= throughDate) {
@@ -427,6 +432,16 @@ function buildMissingSubscriptionDates(subscription: SubscriptionEntity, through
   }
 
   return dates
+}
+
+function getNormalizedSubscriptionDates(subscription: SubscriptionEntity) {
+  const datesByPeriod = new Map<string, string>()
+
+  for (const date of (subscription.dates || []).map(subscriptionDate => subscriptionDate.date).sort()) {
+    datesByPeriod.set(getSubscriptionDatePeriodKey(subscription.type, date), date)
+  }
+
+  return [...datesByPeriod.values()].sort()
 }
 
 function getNextSubscriptionDate(type: SubscriptionType, date: string) {
@@ -445,6 +460,16 @@ function getClampedUtcDate(year: number, month: number, day: number) {
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
 
   return new Date(Date.UTC(year, month - 1, Math.min(day, lastDay)))
+}
+
+function getSubscriptionDatePeriodKey(type: SubscriptionType, date: string) {
+  const parts = parseDateParts(date)
+
+  if (type === SubscriptionType.Yearly) {
+    return String(parts.year)
+  }
+
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}`
 }
 
 function getMonthEndDate(date: string) {

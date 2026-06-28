@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import type { BudgetSubscriptionPayment } from '~/stores/budgets'
-import type { BudgetCategory } from '~/stores/budget-categories'
+import type { BudgetCategory } from '~/types/budget-categories'
+import type { BudgetSubscriptionPayment } from '~/types/budgets'
+import BudgetCategoryBillsCard from '~/components/budget/categories/BudgetCategoryBillsCard.vue'
+import BudgetCategoryCreditCardsCard from '~/components/budget/categories/BudgetCategoryCreditCardsCard.vue'
+import BudgetCategoryCustomCard from '~/components/budget/categories/BudgetCategoryCustomCard.vue'
+import BudgetCategoryGoalsCard from '~/components/budget/categories/BudgetCategoryGoalsCard.vue'
+import BudgetCategoryOtherCard from '~/components/budget/categories/BudgetCategoryOtherCard.vue'
+import BudgetCategorySubscriptionsCard from '~/components/budget/categories/BudgetCategorySubscriptionsCard.vue'
 
 defineOptions({
   name: 'BudgetCategoriesPanel'
@@ -30,17 +36,17 @@ const rightBudgetCategories = computed(() => budgetCategories.value.filter((_, i
 function getCategoryComponent(category: BudgetCategory) {
   switch (category.type) {
     case 'subscriptions':
-      return resolveComponent('BudgetCategorySubscriptionsCard')
+      return BudgetCategorySubscriptionsCard
     case 'bills':
-      return resolveComponent('BudgetCategoryBillsCard')
+      return BudgetCategoryBillsCard
     case 'credit_cards':
-      return resolveComponent('BudgetCategoryCreditCardsCard')
+      return BudgetCategoryCreditCardsCard
     case 'goals':
-      return resolveComponent('BudgetCategoryGoalsCard')
+      return BudgetCategoryGoalsCard
     case 'other':
-      return resolveComponent('BudgetCategoryOtherCard')
+      return BudgetCategoryOtherCard
     default:
-      return resolveComponent('BudgetCategoryCustomCard')
+      return BudgetCategoryCustomCard
   }
 }
 

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ConfirmationModal from '~/components/shared/ConfirmationModal.vue'
+
 defineOptions({
   name: 'GoalCloseModal'
 })

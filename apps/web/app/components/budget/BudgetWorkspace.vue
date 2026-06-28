@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment } from '~/stores/budgets'
+import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment } from '~/types/budgets'
+import AddIncomeModal from '~/components/budget/AddIncomeModal.vue'
+import BudgetCalendar from '~/components/budget/BudgetCalendar.vue'
+import BudgetCategoriesPanel from '~/components/budget/BudgetCategoriesPanel.vue'
+import MonthlySummaryPanel from '~/components/budget/MonthlySummaryPanel.vue'
 
 defineOptions({
   name: 'BudgetWorkspace'

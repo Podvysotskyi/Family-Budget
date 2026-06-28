@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AppDatePicker from '~/components/shared/AppDatePicker.vue'
+
 defineOptions({
   name: 'SubscriptionCancellationModal'
 })
@@ -8,6 +10,7 @@ defineProps<{
   subscriptionName: string
   isCanceling: boolean
   error: string | null
+  minDate: string
 }>()
 
 const emit = defineEmits<{
@@ -42,6 +45,7 @@ const effectiveDate = defineModel<string>('effectiveDate', { required: true })
             id="subscription-cancellation-effective-date"
             v-model="effectiveDate"
             empty-label="Select effective date"
+            :min="minDate"
             :disabled="isCanceling"
           />
         </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
+import BudgetWorkspace from '~/components/budget/BudgetWorkspace.vue'
 
 defineOptions({
   name: 'BudgetPageShell'

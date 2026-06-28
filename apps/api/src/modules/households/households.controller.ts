@@ -3,6 +3,8 @@ import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
+import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card.dto'
+import type { SaveCreditCardBalanceDto } from '../credit-cards/dto/save-credit-card-balance.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
@@ -236,25 +238,6 @@ export class HouseholdsController {
     return this.householdService.updateSubscription(householdId, user.id, subscriptionId, input)
   }
 
-  @Delete(':id/subscriptions/:subscriptionId')
-  deleteSubscription(
-    @Param('id') householdId: string,
-    @Param('subscriptionId') subscriptionId: string,
-    @Req() request: AuthenticatedRequest
-  ) {
-    const user = requireRequestUser(request)
-
-    if (!householdId) {
-      throw new BadRequestException('Household id is required')
-    }
-
-    if (!subscriptionId) {
-      throw new BadRequestException('Subscription id is required')
-    }
-
-    return this.householdService.deleteSubscription(householdId, user.id, subscriptionId)
-  }
-
   @Get(':id/credit-cards')
   creditCards(@Param('id') householdId: string, @Req() request: AuthenticatedRequest) {
     const user = requireRequestUser(request)
@@ -301,10 +284,11 @@ export class HouseholdsController {
     return this.householdService.updateCreditCard(householdId, user.id, creditCardId, input)
   }
 
-  @Delete(':id/credit-cards/:creditCardId')
-  deleteCreditCard(
+  @Patch(':id/credit-cards/:creditCardId/cancel')
+  cancelCreditCard(
     @Param('id') householdId: string,
     @Param('creditCardId') creditCardId: string,
+    @Body() input: CancelCreditCardDto,
     @Req() request: AuthenticatedRequest
   ) {
     const user = requireRequestUser(request)
@@ -317,7 +301,27 @@ export class HouseholdsController {
       throw new BadRequestException('Credit card id is required')
     }
 
-    return this.householdService.deleteCreditCard(householdId, user.id, creditCardId)
+    return this.householdService.cancelCreditCard(householdId, user.id, creditCardId, input)
+  }
+
+  @Patch(':id/credit-cards/:creditCardId/balance')
+  saveCreditCardBalance(
+    @Param('id') householdId: string,
+    @Param('creditCardId') creditCardId: string,
+    @Body() input: SaveCreditCardBalanceDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!creditCardId) {
+      throw new BadRequestException('Credit card id is required')
+    }
+
+    return this.householdService.saveCreditCardBalance(householdId, user.id, creditCardId, input)
   }
 
   @Get(':id/goals')
