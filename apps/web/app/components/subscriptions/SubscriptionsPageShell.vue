@@ -16,7 +16,7 @@ const unassignedUserValue = 'household'
 const allSubscriptionsValue = 'all'
 const dashboardStore = useDashboardStore()
 const subscriptionsStore = useSubscriptionsStore()
-const { getTodayDate } = useDateUtils()
+const { getTodayDateString } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const members = computed(() => dashboardStore.members)
@@ -27,7 +27,7 @@ const assignmentFilter = ref(getDefaultAssignmentFilter())
 const showOnlyActiveSubscriptions = ref(true)
 const subscriptionPendingCancel = ref<Subscription | null>(null)
 const cancelingSubscriptionId = ref<string | null>(null)
-const cancellationEffectiveDate = ref(getTodayDate())
+const cancellationEffectiveDate = ref(getTodayDateString())
 const cancellationError = ref<string | null>(null)
 const editingSubscriptionId = ref<string | null>(null)
 const formError = ref<string | null>(null)
@@ -35,7 +35,7 @@ const isSubscriptionModalOpen = ref(false)
 const isSavingSubscription = ref(false)
 const subscriptionName = ref('')
 const subscriptionType = ref<SubscriptionType>('monthly')
-const subscriptionStartDate = ref(getTodayDate())
+const subscriptionStartDate = ref(getTodayDateString())
 const subscriptionEndDate = ref('')
 const subscriptionNextChargeDate = ref('')
 const originalSubscriptionNextChargeDate = ref<string | null>(null)
@@ -134,7 +134,7 @@ function resetForm() {
   formError.value = null
   subscriptionName.value = ''
   subscriptionType.value = 'monthly'
-  subscriptionStartDate.value = getTodayDate()
+  subscriptionStartDate.value = getTodayDateString()
   subscriptionEndDate.value = ''
   subscriptionNextChargeDate.value = ''
   originalSubscriptionNextChargeDate.value = null
@@ -197,14 +197,14 @@ function startCancelingSubscription(subscription: Subscription) {
   }
 
   cancellationError.value = null
-  cancellationEffectiveDate.value = getTodayDate()
+  cancellationEffectiveDate.value = getTodayDateString()
   subscriptionPendingCancel.value = subscription
 }
 
 function closeCancellationModal() {
   subscriptionPendingCancel.value = null
   cancellationError.value = null
-  cancellationEffectiveDate.value = getTodayDate()
+  cancellationEffectiveDate.value = getTodayDateString()
 }
 
 async function saveSubscription() {
@@ -372,7 +372,7 @@ function isActiveSubscription(subscription: Subscription) {
 }
 
 function isExpiredSubscription(subscription: Subscription) {
-  const today = getTodayDate()
+  const today = getTodayDateString()
 
   return Boolean(subscription.endDate && subscription.endDate < today)
 }

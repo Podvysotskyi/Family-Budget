@@ -26,7 +26,7 @@ const props = withDefaults(defineProps<{
   max: undefined
 })
 
-const { formatDateForApi, parseApiDate } = useDateUtils()
+const { formatDateToString, parseDateString } = useDateUtils()
 const modelValue = defineModel<DatePickerModelValue>({ required: true })
 const calendarDate = computed(() => parseCalendarDate(modelValue.value))
 const minCalendarDate = computed(() => parseCalendarDate(props.min))
@@ -72,7 +72,7 @@ function getUpdatedModelValue(value: DateValue | undefined) {
     return modelValue.value instanceof Date ? null : ''
   }
 
-  const nextDate = parseApiDate(value.toString())
+  const nextDate = parseDateString(value.toString())
 
   return modelValue.value instanceof Date ? nextDate : value.toString()
 }
@@ -93,7 +93,7 @@ function parseModelDate(value: DatePickerModelValue | undefined) {
   }
 
   if (typeof value === 'string') {
-    return parseApiDate(value)
+    return parseDateString(value)
   }
 
   return null
@@ -102,7 +102,7 @@ function parseModelDate(value: DatePickerModelValue | undefined) {
 function getApiDate(value: DatePickerModelValue | undefined) {
   const date = parseModelDate(value)
 
-  return date ? formatDateForApi(date) : ''
+  return date ? formatDateToString(date) : ''
 }
 </script>
 

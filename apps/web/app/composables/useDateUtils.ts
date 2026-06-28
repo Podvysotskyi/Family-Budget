@@ -6,11 +6,11 @@ export function useDateUtils() {
     return today
   }
 
-  function getTodayDate() {
-    return formatDateForApi(getToday())
+  function getTodayDateString() {
+    return formatDateToString(getToday())
   }
 
-  function formatDateForApi(value: Date) {
+  function formatDateToString(value: Date) {
     const date = value
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -19,7 +19,7 @@ export function useDateUtils() {
     return `${year}-${month}-${day}`
   }
 
-  function parseApiDate(value: string) {
+  function parseDateString(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return null
     }
@@ -34,9 +34,9 @@ export function useDateUtils() {
   }
 
   return {
-    formatDateForApi,
+    formatDateToString,
     getToday,
-    getTodayDate,
-    parseApiDate
+    getTodayDateString,
+    parseDateString
   }
 }

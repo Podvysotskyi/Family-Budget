@@ -16,7 +16,7 @@ const props = defineProps<{
 const householdAssignmentValue = 'household'
 const dashboardStore = useDashboardStore()
 const creditCardsStore = useCreditCardsStore()
-const { getTodayDate } = useDateUtils()
+const { getTodayDateString } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const members = computed(() => dashboardStore.members)
@@ -28,7 +28,7 @@ const showOnlyActiveCreditCards = ref(true)
 const creditCardPendingDelete = ref<CreditCard | null>(null)
 const deletingCreditCardId = ref<string | null>(null)
 const deletionError = ref<string | null>(null)
-const cancellationEffectiveDate = ref(getTodayDate())
+const cancellationEffectiveDate = ref(getTodayDateString())
 const creditCardBalanceModal = ref<InstanceType<typeof CreditCardBalanceModal> | null>(null)
 const editingCreditCardId = ref<string | null>(null)
 const formError = ref<string | null>(null)
@@ -37,8 +37,8 @@ const isSavingCreditCard = ref(false)
 const creditCardName = ref('')
 const hasMultipleMembers = computed(() => members.value.length > 1)
 const creditCardAssigneeId = ref(getDefaultCreateCreditCardUserId())
-const creditCardStartDate = ref(getTodayDate())
-const creditCardDueDate = ref(getTodayDate())
+const creditCardStartDate = ref(getTodayDateString())
+const creditCardDueDate = ref(getTodayDateString())
 const creditCardLimit = ref<string | number>('')
 const creditCardNavigationItems = computed<NavigationMenuItem[]>(() => {
   return [
@@ -138,8 +138,8 @@ function resetForm() {
   formError.value = null
   creditCardName.value = ''
   creditCardAssigneeId.value = getDefaultCreateCreditCardUserId()
-  creditCardStartDate.value = getTodayDate()
-  creditCardDueDate.value = getTodayDate()
+  creditCardStartDate.value = getTodayDateString()
+  creditCardDueDate.value = getTodayDateString()
   creditCardLimit.value = ''
 }
 
@@ -196,14 +196,14 @@ function startDeletingCreditCard(creditCard: CreditCard) {
   }
 
   deletionError.value = null
-  cancellationEffectiveDate.value = getTodayDate()
+  cancellationEffectiveDate.value = getTodayDateString()
   creditCardPendingDelete.value = creditCard
 }
 
 function closeDeletionModal() {
   creditCardPendingDelete.value = null
   deletionError.value = null
-  cancellationEffectiveDate.value = getTodayDate()
+  cancellationEffectiveDate.value = getTodayDateString()
 }
 
 function startEditingCreditCardBalance(creditCard: CreditCard) {
@@ -361,7 +361,7 @@ function isActiveCreditCard(creditCard: CreditCard) {
 }
 
 function isClosedCreditCard(creditCard: CreditCard) {
-  const today = getTodayDate()
+  const today = getTodayDateString()
 
   return Boolean(creditCard.endDate && creditCard.endDate < today)
 }

@@ -21,15 +21,14 @@ Use this skill when working on forms in `apps/web/app`. Match the pattern establ
 - Put reusable TypeScript declarations in `apps/web/app/types/`, not in Pinia stores or large components.
 - Keep raw UI form state separate from API/store payload types.
 - Use `Date | null` for date picker form state in new/refactored forms.
-- Convert `Date` to API `YYYY-MM-DD` strings only at the store/API boundary with `useDateUtils().formatDateForApi`.
+- Convert `Date` to `YYYY-MM-DD` strings only at the store/API boundary with `useDateUtils().formatDateToString`.
 - Use `null` for empty required form fields when the input component needs an empty state; normalize `null` in the Zod schema so submit data remains non-null.
-- For numeric `UInput`, store numbers in form state and convert at the input boundary:
+- For numeric `UInput`, store numbers in form state and use Nuxt UI's nullable model modifier for empty values:
 
 ```vue
 <UInput
-  :model-value="String(formData.amount ?? '')"
+  v-model.nullable="formData.amount"
   type="number"
-  @update:model-value="value => formData.amount = value === '' ? null : Number(value)"
 />
 ```
 
@@ -39,7 +38,7 @@ Use this skill when working on forms in `apps/web/app`. Match the pattern establ
 - Prefer direct Zod constraints over `superRefine` when possible:
 
 ```ts
-const minDate = computed(() => selectedItem.value ? parseApiDate(selectedItem.value.startDate) || getToday() : getToday())
+const minDate = computed(() => selectedItem.value ? parseDateString(selectedItem.value.startDate) || getToday() : getToday())
 const formSchema = computed(() => z.object({
   date: z.preprocess(
     value => value === null ? undefined : value,
@@ -82,9 +81,9 @@ function close(force = false) {
 
 - Use `useDateUtils()` for date helpers:
   - `getToday()`
-  - `getTodayDate()`
-  - `parseApiDate(value)`
-  - `formatDateForApi(date)`
+  - `getTodayDateString()`
+  - `parseDateString(value)`
+  - `formatDateToString(date)`
 - Use `AppDatePicker` for date fields.
 - Prefer `Date | null` form state in new/refactored forms; preserve legacy string callers only when changing them would broaden scope.
 
@@ -96,7 +95,7 @@ function close(force = false) {
 
 ```ts
 const input: SaveThingInput = {
-  date: formatDateForApi(event.data.date),
+  date: formatDateToString(event.data.date),
   amount: event.data.amount
 }
 

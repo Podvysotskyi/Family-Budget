@@ -9,7 +9,7 @@ defineOptions({
 })
 
 const creditCardsStore = useCreditCardsStore()
-const { formatDateForApi, getToday, parseApiDate } = useDateUtils()
+const { formatDateToString, getToday, parseDateString } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
 const isOpen = ref(false)
@@ -20,7 +20,7 @@ const formData = reactive<CreditCardBalanceFormData>({
   balance: null
 })
 
-const minDate = computed(() => selectedCreditCard.value ? parseApiDate(selectedCreditCard.value.startDate) || getToday() : getToday())
+const minDate = computed(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
 const formSchema = computed(() => z.object({
   date: z.preprocess(
     value => value === null ? undefined : value,
@@ -63,7 +63,7 @@ async function save(event: CreditCardBalanceSubmitEvent) {
 
   try {
     const input: SaveCreditCardBalanceInput = {
-      date: formatDateForApi(event.data.date),
+      date: formatDateToString(event.data.date),
       balance: event.data.balance
     }
 
@@ -86,13 +86,9 @@ function resetForm(creditCard?: CreditCard) {
 
 function getDefaultBalanceDate(creditCard: CreditCard) {
   const today = getToday()
-  const startDate = parseApiDate(creditCard.startDate) || today
+  const startDate = parseDateString(creditCard.startDate) || today
 
   return startDate > today ? startDate : today
-}
-
-function updateBalance(value: string | number) {
-  formData.balance = value === '' ? null : Number(value)
 }
 
 defineExpose({
@@ -138,7 +134,7 @@ defineExpose({
         >
           <UInput
             id="credit-card-balance-amount"
-            :model-value="String(formData.balance ?? '')"
+            v-model.nullable="formData.balance"
             class="w-full"
             icon="i-lucide-dollar-sign"
             type="number"
@@ -146,7 +142,6 @@ defineExpose({
             step="0.01"
             placeholder="0.00"
             :disabled="isSaving"
-            @update:model-value="updateBalance"
           />
         </UFormField>
       </UForm>

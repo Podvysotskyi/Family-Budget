@@ -11,7 +11,7 @@ defineOptions({
 const householdAssignmentValue = 'household'
 const dashboardStore = useDashboardStore()
 const goalsStore = useGoalsStore()
-const { getTodayDate } = useDateUtils()
+const { getTodayDateString } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const goals = computed(() => goalsStore.getGoals(householdId.value))
@@ -28,7 +28,7 @@ const isGoalModalOpen = ref(false)
 const isSavingGoal = ref(false)
 const goalName = ref('')
 const goalUserId = ref(getDefaultGoalUserId())
-const goalStartDate = ref(getTodayDate())
+const goalStartDate = ref(getTodayDateString())
 const goalEndDate = ref('')
 const goalIncludeInBudget = ref(true)
 const goalTargetType = ref<GoalTargetType>('monthly')
@@ -103,7 +103,7 @@ function resetForm() {
   formError.value = null
   goalName.value = ''
   goalUserId.value = getDefaultGoalUserId()
-  goalStartDate.value = getTodayDate()
+  goalStartDate.value = getTodayDateString()
   goalEndDate.value = ''
   goalIncludeInBudget.value = true
   goalTargetType.value = 'monthly'
@@ -290,13 +290,13 @@ function getGoalAssignmentLabel(goal: Goal) {
 }
 
 function isActiveGoal(goal: Goal) {
-  const today = getTodayDate()
+  const today = getTodayDateString()
 
   return !goal.endDate || goal.endDate >= today
 }
 
 function isClosedGoal(goal: Goal) {
-  const today = getTodayDate()
+  const today = getTodayDateString()
 
   return Boolean(goal.endDate && goal.endDate < today)
 }
