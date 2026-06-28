@@ -1,4 +1,4 @@
-import type { CancelCreditCardInput, CreditCard, SaveCreditCardBalanceInput, SaveCreditCardInput } from '~/types/credit-cards'
+import type { CancelCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 
 export const useCreditCardsStore = defineStore('creditCards', {
   state: () => ({
@@ -41,36 +41,39 @@ export const useCreditCardsStore = defineStore('creditCards', {
       }
     },
 
-    async createCreditCard(householdId: string, input: SaveCreditCardInput) {
+    async createHouseholdCreditCard(householdId: string, input: SaveCreditCardInput) {
       await storeApiFetch(`/households/${householdId}/credit-cards`, {
         method: 'POST',
         body: input
       })
-      await this.fetchCreditCards(householdId)
     },
 
-    async updateCreditCard(householdId: string, creditCardId: string, input: SaveCreditCardInput) {
+    async createUserCreditCard(userId: string, input: SaveCreditCardInput) {
+      await storeApiFetch(`/users/${userId}/credit-cards`, {
+        method: 'POST',
+        body: input
+      })
+    },
+
+    async updateCreditCard(creditCardId: string, input: SaveCreditCardInput) {
       await storeApiFetch(`/credit-cards/${creditCardId}`, {
         method: 'PATCH',
         body: input
       })
-      await this.fetchCreditCards(householdId)
     },
 
-    async cancelCreditCard(householdId: string, creditCardId: string, input: CancelCreditCardInput) {
+    async cancelCreditCard(creditCardId: string, input: CancelCreditCardInput) {
       await storeApiFetch(`/credit-cards/${creditCardId}/cancel`, {
         method: 'PATCH',
         body: input
       })
-      await this.fetchCreditCards(householdId)
     },
 
-    async saveCreditCardBalance(householdId: string, creditCardId: string, input: SaveCreditCardBalanceInput) {
-      await storeApiFetch(`/households/${householdId}/credit-cards/${creditCardId}/balance`, {
+    async updateCreditCardBalance(creditCardId: string, input: UpdateCreditCardBalanceInput) {
+      await storeApiFetch(`/credit-cards/${creditCardId}/balance`, {
         method: 'PATCH',
         body: input
       })
-      await this.fetchCreditCards(householdId)
     }
   }
 })

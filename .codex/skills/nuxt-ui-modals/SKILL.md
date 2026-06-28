@@ -19,6 +19,11 @@ Use this skill when working on modal components in `apps/web/app`. Match the pat
 const isOpen = ref(false)
 const selectedItem = ref<Item | null>(null)
 
+const emit = defineEmits<{
+  closed: []
+  saved: []
+}>()
+
 function open(item: Item) {
   selectedItem.value = item
   resetForm(item)
@@ -36,6 +41,7 @@ defineExpose({
 - Use a template ref to open modal-owned flows.
 - Keep parent state limited to list/page state and selected action triggers.
 - Do not duplicate modal form state in the parent.
+- When modal-owned persistence changes list data, have the parent refresh from `@created` or `@saved`; do not make Pinia mutation actions refresh list state implicitly.
 
 ```ts
 const itemModal = ref<InstanceType<typeof ItemModal> | null>(null)
@@ -46,7 +52,10 @@ function startEditingItem(item: Item) {
 ```
 
 ```vue
-<ItemModal ref="itemModal" />
+<ItemModal
+  ref="itemModal"
+  @saved="refreshItems"
+/>
 ```
 
 ## Closing
@@ -74,8 +83,16 @@ function handleClose() {
 
   selectedItem.value = null
   resetForm()
+  emit('closed')
 }
 ```
+
+## Events
+
+- Emit `created` after a successful create operation and before `close(true)`.
+- Emit `saved` after a successful update, cancellation, balance update, or other save-like operation and before `close(true)`.
+- Emit `closed` from `handleClose()` after selected item, context, and form state cleanup.
+- Type modal events with `defineEmits`; do not emit success events from parent-owned click handlers when the modal owns persistence.
 
 ## UModal Props
 
@@ -113,6 +130,7 @@ async function save(event: SubmitEvent) {
   try {
     await store.saveItem(selectedItem.value.id, event.data)
     addSuccessToast('Item saved.')
+    emit('saved')
     close(true)
   } catch {
     addErrorToast('Item could not be saved.')

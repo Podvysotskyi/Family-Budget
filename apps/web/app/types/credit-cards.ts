@@ -77,7 +77,6 @@ export type CreditCardEditFormContext = {
   assignmentOptions: CreditCardAssignmentOption[]
   currentUserId: string
   hasMultipleMembers: boolean
-  householdId: string
 }
 
 export type CancelCreditCardInput = {
@@ -96,7 +95,7 @@ export type CreditCardCancellationSubmitEvent = {
   data: CreditCardCancellationSubmitData
 }
 
-export type SaveCreditCardBalanceInput = {
+export type UpdateCreditCardBalanceInput = {
   date: string
   balance: number
 }

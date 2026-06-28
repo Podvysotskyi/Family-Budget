@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { CreditCardBalanceFormData, CreditCardBalanceSubmitEvent } from '~/types/credit-card-balance'
-import type { CreditCard, SaveCreditCardBalanceInput } from '~/types/credit-cards'
+import type { CreditCardUpdateBalanceFormData, CreditCardUpdateBalanceSubmitEvent } from '~/types/credit-card-update-balance'
+import type { CreditCard, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
 defineOptions({
@@ -12,10 +12,15 @@ const creditCardsStore = useCreditCardsStore()
 const { formatDateToString, getToday, parseDateString } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
+const emit = defineEmits<{
+  closed: []
+  saved: []
+}>()
+
 const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
-const formData = reactive<CreditCardBalanceFormData>({
+const formData = reactive<CreditCardUpdateBalanceFormData>({
   date: null,
   balance: null
 })
@@ -59,9 +64,10 @@ function handleClose() {
 
   selectedCreditCard.value = null
   resetForm()
+  emit('closed')
 }
 
-async function save(event: CreditCardBalanceSubmitEvent) {
+async function save(event: CreditCardUpdateBalanceSubmitEvent) {
   if (!selectedCreditCard.value) {
     return
   }
@@ -69,13 +75,14 @@ async function save(event: CreditCardBalanceSubmitEvent) {
   isSaving.value = true
 
   try {
-    const input: SaveCreditCardBalanceInput = {
+    const input: UpdateCreditCardBalanceInput = {
       date: formatDateToString(event.data.date),
       balance: event.data.balance
     }
 
-    await creditCardsStore.saveCreditCardBalance(selectedCreditCard.value!.householdId, selectedCreditCard.value!.id, input)
+    await creditCardsStore.updateCreditCardBalance(selectedCreditCard.value!.id, input)
     addSuccessToast('Credit card balance saved.')
+    emit('saved')
     close(true)
   } catch {
     addErrorToast('Credit card balance could not be saved.')

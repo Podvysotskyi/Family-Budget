@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Inject, Param, Post, Query, Req } from '@nestjs/common'
 import type { AuthenticatedRequest } from '../auth/request-user'
 import { requireRequestUser } from '../auth/request-user'
+import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
 import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
 import { HouseholdService } from './households.service'
@@ -152,6 +153,21 @@ export class UserBudgetsController {
     }
 
     return this.householdService.createIncomeForCurrentUser(user.id, budgetUserId, budgetId, input)
+  }
+
+  @Post('users/:id/credit-cards')
+  createUserCreditCard(
+    @Param('id') budgetUserId: string,
+    @Body() input: SaveCreditCardDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.createUserCreditCard(user.id, budgetUserId, input)
   }
 }
 

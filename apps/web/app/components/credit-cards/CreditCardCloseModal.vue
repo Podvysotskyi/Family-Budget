@@ -16,6 +16,11 @@ const creditCardsStore = useCreditCardsStore()
 const { formatDateToString, getToday, parseDateString } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
+const emit = defineEmits<{
+  closed: []
+  saved: []
+}>()
+
 const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
@@ -57,6 +62,7 @@ function handleClose() {
 
   selectedCreditCard.value = null
   resetForm()
+  emit('closed')
 }
 
 async function save(event: CreditCardCancellationSubmitEvent) {
@@ -75,8 +81,9 @@ async function save(event: CreditCardCancellationSubmitEvent) {
       effectiveDate: formatDateToString(event.data.effectiveDate)
     }
 
-    await creditCardsStore.cancelCreditCard(selectedCreditCard.value.householdId, selectedCreditCard.value.id, input)
+    await creditCardsStore.cancelCreditCard(selectedCreditCard.value.id, input)
     addSuccessToast('Credit card canceled.')
+    emit('saved')
     close(true)
   } catch {
     addErrorToast('Credit card could not be canceled.')

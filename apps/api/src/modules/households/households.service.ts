@@ -8,7 +8,7 @@ import { BudgetsRepository, sortBudgetPeriods, toBudgetPeriod } from '../budgets
 import { BudgetType } from '../budgets/entities/budget-type'
 import { CreditCardsRepository } from '../credit-cards/credit-cards.repository'
 import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card.dto'
-import type { SaveCreditCardBalanceDto } from '../credit-cards/dto/save-credit-card-balance.dto'
+import type { UpdateCreditCardBalanceDto } from '../credit-cards/dto/update-credit-card-balance.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { CreditCardEntity } from '../credit-cards/entities/credit-card.entity'
 import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
@@ -562,16 +562,31 @@ export class HouseholdService {
     }
   }
 
-  async createCreditCard(householdId: string, userId: string, input: SaveCreditCardDto) {
+  async createHouseholdCreditCard(householdId: string, userId: string, input: SaveCreditCardDto) {
     await this.requireHouseholdUser(householdId, userId)
-    const creditCardUserId = await this.getCreditCardUserId(householdId, input)
 
-    if (creditCardUserId && creditCardUserId !== userId) {
+    return this.createCreditCard(householdId, null, input)
+  }
+
+  async createUserCreditCard(currentUserId: string, creditCardUserId: string, input: SaveCreditCardDto) {
+    const household = await this.usersRepository.findHouseholdByUserId(creditCardUserId)
+
+    if (!household) {
+      throw new NotFoundException('Credit card user not found')
+    }
+
+    await this.requireHouseholdUser(household.householdId, currentUserId)
+
+    if (creditCardUserId !== currentUserId) {
       throw new ForbiddenException('Credit cards can only be created for current user or household')
     }
 
+    return this.createCreditCard(household.householdId, creditCardUserId, input)
+  }
+
+  private async createCreditCard(householdId: string, creditCardUserId: string | null, input: SaveCreditCardDto) {
     const dueDate = getCreditCardDueDate(input)
-    const startDate = getCreditCardCreateStartDate(dueDate)
+    const startDate = getCreditCardStartDate(input)
     const creditCard = await this.creditCardsRepository.create(
       {
         householdId,
@@ -664,7 +679,7 @@ export class HouseholdService {
     }
   }
 
-  async saveCreditCardBalance(householdId: string, userId: string, creditCardId: string, input: SaveCreditCardBalanceDto) {
+  async updateCreditCardBalance(householdId: string, userId: string, creditCardId: string, input: UpdateCreditCardBalanceDto) {
     await this.requireHouseholdUser(householdId, userId)
     const creditCard = await this.creditCardsRepository.findByIdAndHouseholdId(creditCardId, householdId)
 
@@ -677,7 +692,7 @@ export class HouseholdService {
     }
 
     const balanceDate = getCreditCardBalanceDate(input, creditCard.startDate)
-    const balance = await this.creditCardsRepository.saveBalance({
+    const balance = await this.creditCardsRepository.updateBalance({
       creditCardId,
       date: balanceDate,
       balance: getCreditCardBalance(input)
@@ -1160,12 +1175,6 @@ function getCreditCardCancellationDate(input: CancelCreditCardDto, startDate: st
   return effectiveDate
 }
 
-function getCreditCardCreateStartDate(dueDate: string) {
-  const today = getCurrentDateKey()
-
-  return dueDate < today ? dueDate : today
-}
-
 function getCreditCardLimit(input: SaveCreditCardDto) {
   const limit = Number(input?.limit)
 
@@ -1176,7 +1185,7 @@ function getCreditCardLimit(input: SaveCreditCardDto) {
   return limit
 }
 
-function getCreditCardBalanceDate(input: SaveCreditCardBalanceDto, startDate: string) {
+function getCreditCardBalanceDate(input: UpdateCreditCardBalanceDto, startDate: string) {
   const balanceDate = typeof input?.date === 'string' ? input.date : ''
 
   if (!isDateString(balanceDate)) {
@@ -1194,7 +1203,7 @@ function getCreditCardBalanceDate(input: SaveCreditCardBalanceDto, startDate: st
   return balanceDate
 }
 
-function getCreditCardBalance(input: SaveCreditCardBalanceDto) {
+function getCreditCardBalance(input: UpdateCreditCardBalanceDto) {
   const balance = Number(input?.balance)
 
   if (!Number.isFinite(balance) || balance < 0) {

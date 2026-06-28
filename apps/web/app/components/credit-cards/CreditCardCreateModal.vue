@@ -17,6 +17,11 @@ const creditCardsStore = useCreditCardsStore()
 const { formatDateToString, getToday } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
+const emit = defineEmits<{
+  closed: []
+  created: []
+}>()
+
 const isOpen = ref(false)
 const isSaving = ref(false)
 const context = ref<CreditCardCreateFormContext | null>(null)
@@ -77,6 +82,7 @@ function handleClose() {
 
   context.value = null
   resetForm()
+  emit('closed')
 }
 
 async function save(event: CreditCardFormSubmitEvent) {
@@ -95,8 +101,14 @@ async function save(event: CreditCardFormSubmitEvent) {
       limit: event.data.limit
     }
 
-    await creditCardsStore.createCreditCard(context.value.householdId, input)
+    if (input.userId) {
+      await creditCardsStore.createUserCreditCard(input.userId, input)
+    } else {
+      await creditCardsStore.createHouseholdCreditCard(context.value.householdId, input)
+    }
+
     addSuccessToast('Credit card created.')
+    emit('created')
     close(true)
   } catch {
     addErrorToast('Credit card could not be created.')

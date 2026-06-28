@@ -18,6 +18,11 @@ const creditCardsStore = useCreditCardsStore()
 const { formatDateToString, getToday, parseDateString } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
+const emit = defineEmits<{
+  closed: []
+  saved: []
+}>()
+
 const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
@@ -48,8 +53,8 @@ const formSchema = computed(() => z.object({
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
   )
 }))
-const canSubmit = computed(() => Boolean(selectedCreditCard.value && context.value?.householdId && !isSaving.value))
-const isDisabled = computed(() => isSaving.value || !context.value?.householdId)
+const canSubmit = computed(() => Boolean(selectedCreditCard.value && context.value && !isSaving.value))
+const isDisabled = computed(() => isSaving.value || !context.value)
 
 function open(creditCard: CreditCard, formContext: CreditCardEditFormContext) {
   if (creditCard.endDate) {
@@ -79,10 +84,11 @@ function handleClose() {
   selectedCreditCard.value = null
   context.value = null
   resetForm()
+  emit('closed')
 }
 
 async function save(event: CreditCardFormSubmitEvent) {
-  if (!selectedCreditCard.value || !context.value?.householdId) {
+  if (!selectedCreditCard.value || !context.value) {
     return
   }
 
@@ -97,8 +103,9 @@ async function save(event: CreditCardFormSubmitEvent) {
       startDate: selectedCreditCard.value.startDate
     }
 
-    await creditCardsStore.updateCreditCard(context.value.householdId, selectedCreditCard.value.id, input)
+    await creditCardsStore.updateCreditCard(selectedCreditCard.value.id, input)
     addSuccessToast('Credit card saved.')
+    emit('saved')
     close(true)
   } catch {
     addErrorToast('Credit card could not be saved.')

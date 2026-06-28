@@ -4,7 +4,7 @@ import { requireRequestUser } from '../auth/request-user'
 import type { BudgetCategoryReorderDirection } from '../budget-categories/budget-categories.repository'
 import type { SaveBudgetCategoryDto } from '../budget-categories/dto/save-budget-category.dto'
 import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card.dto'
-import type { SaveCreditCardBalanceDto } from '../credit-cards/dto/save-credit-card-balance.dto'
+import type { UpdateCreditCardBalanceDto } from '../credit-cards/dto/update-credit-card-balance.dto'
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
@@ -261,7 +261,7 @@ export class HouseholdsController {
       throw new BadRequestException('Household id is required')
     }
 
-    return this.householdService.createCreditCard(householdId, user.id, input)
+    return this.householdService.createHouseholdCreditCard(householdId, user.id, input)
   }
 
   @Patch(':id/credit-cards/:creditCardId')
@@ -305,10 +305,10 @@ export class HouseholdsController {
   }
 
   @Patch(':id/credit-cards/:creditCardId/balance')
-  saveCreditCardBalance(
+  updateCreditCardBalance(
     @Param('id') householdId: string,
     @Param('creditCardId') creditCardId: string,
-    @Body() input: SaveCreditCardBalanceDto,
+    @Body() input: UpdateCreditCardBalanceDto,
     @Req() request: AuthenticatedRequest
   ) {
     const user = requireRequestUser(request)
@@ -321,7 +321,7 @@ export class HouseholdsController {
       throw new BadRequestException('Credit card id is required')
     }
 
-    return this.householdService.saveCreditCardBalance(householdId, user.id, creditCardId, input)
+    return this.householdService.updateCreditCardBalance(householdId, user.id, creditCardId, input)
   }
 
   @Get(':id/goals')

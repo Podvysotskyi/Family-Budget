@@ -20,7 +20,7 @@ export interface SaveCreditCardLimitInput {
   limit: number
 }
 
-export interface SaveCreditCardBalanceInput {
+export interface UpdateCreditCardBalanceInput {
   creditCardId: string
   date: string
   balance: number
@@ -180,7 +180,7 @@ export class CreditCardsRepository {
     })
   }
 
-  async saveBalance(input: SaveCreditCardBalanceInput) {
+  async updateBalance(input: UpdateCreditCardBalanceInput) {
     await this.creditCardsRepository.manager
       .getRepository(CreditCardBalanceEntity)
       .upsert(

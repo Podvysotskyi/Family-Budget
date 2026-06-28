@@ -178,8 +178,7 @@ function getCreditCardEditFormContext() {
   return {
     assignmentOptions: assignmentOptions.value,
     currentUserId: dashboardStore.user?.id || '',
-    hasMultipleMembers: hasMultipleMembers.value,
-    householdId: householdId.value
+    hasMultipleMembers: hasMultipleMembers.value
   }
 }
 
@@ -391,12 +390,24 @@ function buildCreditCardAssignmentPath(assignment: string) {
       </div>
     </section>
 
-    <CreditCardCreateModal ref="creditCardCreateModal" />
+    <CreditCardCreateModal
+      ref="creditCardCreateModal"
+      @created="refresh"
+    />
 
-    <CreditCardEditModal ref="creditCardEditModal" />
+    <CreditCardEditModal
+      ref="creditCardEditModal"
+      @saved="refresh"
+    />
 
-    <CreditCardUpdateBalanceModal ref="creditCardUpdateBalanceModal" />
+    <CreditCardUpdateBalanceModal
+      ref="creditCardUpdateBalanceModal"
+      @saved="refresh"
+    />
 
-    <CreditCardCloseModal ref="creditCardCloseModal" />
+    <CreditCardCloseModal
+      ref="creditCardCloseModal"
+      @saved="refresh"
+    />
   </UContainer>
 </template>
