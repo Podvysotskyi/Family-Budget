@@ -40,6 +40,24 @@ export type SaveCreditCardInput = {
   limit: number
 }
 
+export type CreditCardFormData = {
+  name: string
+  userId: string
+  dueDate: Date | null
+  limit: number | null
+}
+
+export type CreditCardFormSubmitData = {
+  name: string
+  userId: string
+  dueDate: Date
+  limit: number
+}
+
+export type CreditCardFormSubmitEvent = {
+  data: CreditCardFormSubmitData
+}
+
 export type CancelCreditCardInput = {
   effectiveDate: string
 }

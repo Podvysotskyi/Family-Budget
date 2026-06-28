@@ -27,16 +27,8 @@ const assignmentFilter = ref(getDefaultAssignmentFilter())
 const showOnlyActiveCreditCards = ref(true)
 const creditCardBalanceModal = ref<InstanceType<typeof CreditCardBalanceModal> | null>(null)
 const creditCardCloseModal = ref<InstanceType<typeof CreditCardCloseModal> | null>(null)
-const editingCreditCardId = ref<string | null>(null)
-const formError = ref<string | null>(null)
-const isCreditCardModalOpen = ref(false)
-const isSavingCreditCard = ref(false)
-const creditCardName = ref('')
+const creditCardFormModal = ref<InstanceType<typeof CreditCardFormModal> | null>(null)
 const hasMultipleMembers = computed(() => members.value.length > 1)
-const creditCardAssigneeId = ref(getDefaultCreateCreditCardUserId())
-const creditCardStartDate = ref(getTodayDateString())
-const creditCardDueDate = ref(getTodayDateString())
-const creditCardLimit = ref<string | number>('')
 const creditCardNavigationItems = computed<NavigationMenuItem[]>(() => {
   return [
     ...(hasMultipleMembers.value
@@ -70,13 +62,6 @@ const assignmentOptions = computed(() => {
         }]
       : [])
   ]
-})
-const trimmedCreditCardName = computed(() => creditCardName.value.trim())
-const parsedCreditCardLimit = computed(() => Number(creditCardLimit.value))
-const isEditingCreditCard = computed(() => Boolean(editingCreditCardId.value))
-const creditCardDueDateMin = computed(() => isEditingCreditCard.value ? creditCardStartDate.value : undefined)
-const canSaveCreditCard = computed(() => {
-  return Boolean(!pending.value && trimmedCreditCardName.value && householdId.value && creditCardLimit.value)
 })
 const canCreateCreditCard = computed(() => {
   return assignmentFilter.value === householdAssignmentValue || assignmentFilter.value === dashboardStore.user?.id
@@ -113,30 +98,10 @@ watch(() => props.creditCardUserId, () => {
 
 watch(() => dashboardStore.user?.id, () => {
   assignmentFilter.value = getDefaultAssignmentFilter()
-
-  if (!creditCardAssigneeId.value || (!hasMultipleMembers.value && creditCardAssigneeId.value === householdAssignmentValue)) {
-    creditCardAssigneeId.value = getDefaultCreateCreditCardUserId()
-  }
-}, { immediate: true })
-
-watch(hasMultipleMembers, (multipleMembers) => {
-  if (!multipleMembers && creditCardAssigneeId.value === householdAssignmentValue) {
-    creditCardAssigneeId.value = getDefaultCreateCreditCardUserId()
-  }
 }, { immediate: true })
 
 async function refresh() {
   await creditCardsStore.fetchCreditCards(householdId.value)
-}
-
-function resetForm() {
-  editingCreditCardId.value = null
-  formError.value = null
-  creditCardName.value = ''
-  creditCardAssigneeId.value = getDefaultCreateCreditCardUserId()
-  creditCardStartDate.value = getTodayDateString()
-  creditCardDueDate.value = getTodayDateString()
-  creditCardLimit.value = ''
 }
 
 function startCreatingCreditCard() {
@@ -144,26 +109,7 @@ function startCreatingCreditCard() {
     return
   }
 
-  resetForm()
-  isCreditCardModalOpen.value = true
-
-  if (import.meta.client) {
-    nextTick(() => document.getElementById('credit-card-name')?.focus())
-  }
-}
-
-function closeCreditCardModal() {
-  isCreditCardModalOpen.value = false
-  resetForm()
-}
-
-function setCreditCardModalOpen(open: boolean) {
-  if (open) {
-    isCreditCardModalOpen.value = true
-    return
-  }
-
-  closeCreditCardModal()
+  creditCardFormModal.value?.openCreate(getCreditCardFormContext())
 }
 
 function startEditingCreditCard(creditCard: CreditCard) {
@@ -171,19 +117,7 @@ function startEditingCreditCard(creditCard: CreditCard) {
     return
   }
 
-  const latestLimit = creditCard.limits[0]
-  formError.value = null
-  editingCreditCardId.value = creditCard.id
-  creditCardName.value = creditCard.name
-  creditCardAssigneeId.value = creditCard.userId || getDefaultCreateCreditCardUserId()
-  creditCardStartDate.value = creditCard.startDate
-  creditCardDueDate.value = creditCard.dueDate
-  creditCardLimit.value = String(creditCard.currentLimit || latestLimit?.limit || '')
-  isCreditCardModalOpen.value = true
-
-  if (import.meta.client) {
-    nextTick(() => document.getElementById('credit-card-name')?.focus())
-  }
+  creditCardFormModal.value?.openEdit(creditCard, getCreditCardFormContext())
 }
 
 function startDeletingCreditCard(creditCard: CreditCard) {
@@ -200,69 +134,6 @@ function startEditingCreditCardBalance(creditCard: CreditCard) {
   }
 
   creditCardBalanceModal.value?.open(creditCard)
-}
-
-async function saveCreditCard() {
-  formError.value = null
-
-  if (!householdId.value) {
-    formError.value = 'Household is required.'
-    return
-  }
-
-  if (!trimmedCreditCardName.value) {
-    formError.value = 'Credit card name is required.'
-    return
-  }
-
-  if (editingCreditCardId.value && !isDateString(creditCardStartDate.value)) {
-    formError.value = 'Start date is required.'
-    return
-  }
-
-  if (!isDateString(creditCardDueDate.value)) {
-    formError.value = 'Due date is required.'
-    return
-  }
-
-  if (!Number.isFinite(parsedCreditCardLimit.value) || parsedCreditCardLimit.value <= 0) {
-    formError.value = 'Limit must be greater than zero.'
-    return
-  }
-
-  isSavingCreditCard.value = true
-
-  try {
-    const input = {
-      name: trimmedCreditCardName.value,
-      userId: getCreditCardUserId(),
-      dueDate: creditCardDueDate.value,
-      limit: parsedCreditCardLimit.value
-    }
-
-    if (editingCreditCardId.value) {
-      await creditCardsStore.updateCreditCard(householdId.value, editingCreditCardId.value, {
-        ...input,
-        startDate: creditCardStartDate.value
-      })
-    } else {
-      await creditCardsStore.createCreditCard(householdId.value, input)
-    }
-
-    closeCreditCardModal()
-  } catch {
-    formError.value = editingCreditCardId.value ? 'Credit card could not be saved.' : 'Credit card could not be created.'
-  } finally {
-    isSavingCreditCard.value = false
-  }
-}
-
-function getCreditCardUserId() {
-  if (!hasMultipleMembers.value) {
-    return dashboardStore.user?.id || null
-  }
-
-  return creditCardAssigneeId.value === householdAssignmentValue ? null : creditCardAssigneeId.value
 }
 
 function getDefaultAssignmentFilter() {
@@ -289,6 +160,16 @@ function getDefaultCreateCreditCardUserId() {
   }
 
   return dashboardStore.user?.id || householdAssignmentValue
+}
+
+function getCreditCardFormContext() {
+  return {
+    assignmentOptions: assignmentOptions.value,
+    currentUserId: dashboardStore.user?.id || '',
+    defaultUserId: getDefaultCreateCreditCardUserId(),
+    hasMultipleMembers: hasMultipleMembers.value,
+    householdId: householdId.value
+  }
 }
 
 function getCreditCardAssignmentLabel(creditCard: CreditCard) {
@@ -348,10 +229,6 @@ function formatDate(value: string | null) {
   })
 }
 
-function isDateString(value: string) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
-
 function buildCreditCardAssignmentPath(assignment: string) {
   if (assignment === dashboardStore.defaultBudgetUserId) {
     return '/credit-cards'
@@ -380,7 +257,7 @@ function buildCreditCardAssignmentPath(assignment: string) {
         <UButton
           icon="i-lucide-plus"
           label="New credit card"
-          :disabled="pending || isSavingCreditCard || !householdId || !canCreateCreditCard"
+          :disabled="pending || !householdId || !canCreateCreditCard"
           @click="startCreatingCreditCard"
         />
       </div>
@@ -503,24 +380,7 @@ function buildCreditCardAssignmentPath(assignment: string) {
       </div>
     </section>
 
-    <CreditCardFormModal
-      v-model:name="creditCardName"
-      v-model:user-id="creditCardAssigneeId"
-      v-model:due-date="creditCardDueDate"
-      v-model:limit="creditCardLimit"
-      :open="isCreditCardModalOpen"
-      :is-editing="isEditingCreditCard"
-      :pending="pending"
-      :is-saving="isSavingCreditCard"
-      :has-household="Boolean(householdId)"
-      :form-error="formError"
-      :assignment-options="assignmentOptions"
-      :due-date-min="creditCardDueDateMin"
-      :can-save="canSaveCreditCard"
-      @update:open="setCreditCardModalOpen"
-      @cancel="closeCreditCardModal"
-      @save="saveCreditCard"
-    />
+    <CreditCardFormModal ref="creditCardFormModal" />
 
     <CreditCardBalanceModal ref="creditCardBalanceModal" />
 
