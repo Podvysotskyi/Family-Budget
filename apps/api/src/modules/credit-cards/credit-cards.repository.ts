@@ -49,6 +49,20 @@ export class CreditCardsRepository {
       .getMany()
   }
 
+  listByUserId(userId: string) {
+    return this.creditCardsRepository
+      .createQueryBuilder('creditCard')
+      .leftJoinAndSelect('creditCard.user', 'user')
+      .leftJoinAndSelect('creditCard.limits', 'limits')
+      .leftJoinAndSelect('creditCard.balances', 'balances')
+      .where('creditCard.user_id = :userId', { userId })
+      .orderBy('creditCard.name', 'ASC')
+      .addOrderBy('creditCard.id', 'ASC')
+      .addOrderBy('limits.date', 'DESC')
+      .addOrderBy('balances.date', 'DESC')
+      .getMany()
+  }
+
   async create(cardInput: SaveCreditCardInput, limitInput: Omit<SaveCreditCardLimitInput, 'creditCardId'>) {
     return this.creditCardsRepository.manager.transaction(async (manager) => {
       const creditCard = await manager.save(CreditCardEntity, manager.create(CreditCardEntity, cardInput))

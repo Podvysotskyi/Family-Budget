@@ -1,43 +1,84 @@
 import type { CancelCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 
+const { createAbortController } = useAbortController()
+const { addErrorToast } = useAppToast()
+
 export const useCreditCardsStore = defineStore('creditCards', {
   state: () => ({
-    creditCardsByHouseholdId: {} as Record<string, CreditCard[]>,
-    errorsByHouseholdId: {} as Record<string, string | null>,
-    loadingByHouseholdId: {} as Record<string, boolean>
+    abortController: null as AbortController | null,
+    householdCreditCards: [] as CreditCard[],
+    loading: false,
+    userCreditCards: {} as Record<string, CreditCard[]>
   }),
 
+  getters: {
+    householdCreditCardList: state => state.householdCreditCards,
+
+    userCreditCardList: state => (userId: string) => {
+      return state.userCreditCards[userId] || []
+    },
+
+    hasCreditCards: (state) => {
+      return state.householdCreditCards.length > 0 || Object.values(state.userCreditCards).some(creditCards => creditCards.length > 0)
+    },
+
+    isLoading: state => state.loading
+  },
+
   actions: {
-    getCreditCards(householdId: string) {
-      return this.creditCardsByHouseholdId[householdId] || []
-    },
-
-    getError(householdId: string) {
-      return this.errorsByHouseholdId[householdId] || null
-    },
-
-    isLoading(householdId: string) {
-      return this.loadingByHouseholdId[householdId] || false
-    },
-
-    async fetchCreditCards(householdId: string) {
+    async fetchHouseholdCreditCards(householdId: string) {
       if (!householdId) {
         return
       }
 
-      this.loadingByHouseholdId[householdId] = true
-      this.errorsByHouseholdId[householdId] = null
+      const abortController = createAbortController(this)
+      this.loading = true
+
+      this.householdCreditCards = []
 
       try {
         const response = await storeApiFetch<{
           creditCards: CreditCard[]
-        }>(`/households/${householdId}/credit-cards`)
+        }>(`/households/${householdId}/credit-cards`, {
+          signal: abortController.signal
+        })
 
-        this.creditCardsByHouseholdId[householdId] = response.creditCards
-      } catch {
-        this.errorsByHouseholdId[householdId] = 'Credit cards could not be loaded'
+        this.householdCreditCards = response.creditCards
+        this.abortController = null
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          addErrorToast('Credit cards could not be loaded')
+        }
       } finally {
-        this.loadingByHouseholdId[householdId] = false
+        this.loading = false
+      }
+    },
+
+    async fetchUserCreditCards(userId: string) {
+      if (!userId) {
+        return
+      }
+
+      const abortController = createAbortController(this)
+      this.loading = true
+
+      this.userCreditCards[userId] = []
+
+      try {
+        const response = await storeApiFetch<{
+          creditCards: CreditCard[]
+        }>(`/users/${userId}/credit-cards`, {
+          signal: abortController.signal
+        })
+
+        this.userCreditCards[userId] = response.creditCards
+        this.abortController = null
+      } catch (error) {
+        if (!abortController.signal.aborted) {
+          addErrorToast('Credit cards could not be loaded')
+        }
+      } finally {
+        this.loading = false
       }
     },
 

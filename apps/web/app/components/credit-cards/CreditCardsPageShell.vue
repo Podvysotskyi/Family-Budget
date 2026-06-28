@@ -21,10 +21,15 @@ const { getTodayDateString } = useDateUtils()
 await dashboardStore.fetchDashboard()
 const householdId = computed(() => dashboardStore.householdId)
 const members = computed(() => dashboardStore.members)
-const creditCards = computed(() => creditCardsStore.getCreditCards(householdId.value))
-const pending = computed(() => creditCardsStore.isLoading(householdId.value))
-const error = computed(() => creditCardsStore.getError(householdId.value))
 const assignmentFilter = ref(getDefaultAssignmentFilter())
+const creditCards = computed(() => {
+  if (assignmentFilter.value === householdAssignmentValue) {
+    return creditCardsStore.householdCreditCardList
+  }
+
+  return creditCardsStore.userCreditCardList(assignmentFilter.value)
+})
+const pending = computed(() => creditCardsStore.isLoading)
 const showOnlyActiveCreditCards = ref(true)
 const creditCardCloseModal = ref<InstanceType<typeof CreditCardCloseModal> | null>(null)
 const creditCardCreateModal = ref<InstanceType<typeof CreditCardCreateModal> | null>(null)
@@ -69,27 +74,30 @@ const canCreateCreditCard = computed(() => {
   return assignmentFilter.value === householdAssignmentValue || assignmentFilter.value === dashboardStore.user?.id
 })
 const filteredCreditCards = computed(() => {
-  return creditCards.value.filter((creditCard) => {
-    const matchesAssignment = (assignmentFilter.value === householdAssignmentValue && !creditCard.userId)
-      || creditCard.userId === assignmentFilter.value
-
-    return matchesAssignment && (!showOnlyActiveCreditCards.value || isActiveCreditCard(creditCard))
-  })
+  return creditCards.value.filter(creditCard => !showOnlyActiveCreditCards.value || isActiveCreditCard(creditCard))
 })
 const emptyCreditCardsMessage = computed(() => {
-  if (!creditCards.value.length) {
+  if (!creditCardsStore.hasCreditCards) {
     return 'No credit cards found.'
   }
 
   return showOnlyActiveCreditCards.value ? 'No active credit cards found for this selection.' : 'No credit cards found for this selection.'
 })
 
-if (householdId.value) {
-  await refresh()
-}
+onMounted(async () => {
+  if (householdId.value) {
+    await refresh()
+  }
+})
 
 watch(householdId, async (id) => {
   if (id) {
+    await refresh()
+  }
+})
+
+watch(assignmentFilter, async () => {
+  if (householdId.value) {
     await refresh()
   }
 })
@@ -103,7 +111,13 @@ watch(() => dashboardStore.user?.id, () => {
 }, { immediate: true })
 
 async function refresh() {
-  await creditCardsStore.fetchCreditCards(householdId.value)
+  if (assignmentFilter.value === householdAssignmentValue) {
+    await creditCardsStore.fetchHouseholdCreditCards(householdId.value)
+
+    return
+  }
+
+  await creditCardsStore.fetchUserCreditCards(assignmentFilter.value)
 }
 
 function startCreatingCreditCard() {
@@ -295,7 +309,7 @@ function buildCreditCardAssignmentPath(assignment: string) {
       </div>
 
       <div
-        v-else-if="error || !householdId"
+        v-else-if="!householdId"
         class="px-5 py-4 text-sm text-muted"
       >
         <UAlert

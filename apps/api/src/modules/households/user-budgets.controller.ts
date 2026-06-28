@@ -155,6 +155,20 @@ export class UserBudgetsController {
     return this.householdService.createIncomeForCurrentUser(user.id, budgetUserId, budgetId, input)
   }
 
+  @Get('users/:id/credit-cards')
+  userCreditCards(
+    @Param('id') budgetUserId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.listUserCreditCards(user.id, budgetUserId)
+  }
+
   @Post('users/:id/credit-cards')
   createUserCreditCard(
     @Param('id') budgetUserId: string,

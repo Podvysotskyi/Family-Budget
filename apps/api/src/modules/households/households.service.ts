@@ -562,6 +562,26 @@ export class HouseholdService {
     }
   }
 
+  async listUserCreditCards(currentUserId: string, creditCardUserId: string) {
+    const household = await this.usersRepository.findHouseholdByUserId(creditCardUserId)
+
+    if (!household) {
+      throw new NotFoundException('Credit card user not found')
+    }
+
+    await this.requireHouseholdUser(household.householdId, currentUserId)
+
+    if (creditCardUserId !== currentUserId) {
+      throw new ForbiddenException('Credit cards can only be viewed for current user or household')
+    }
+
+    const creditCards = await this.creditCardsRepository.listByUserId(creditCardUserId)
+
+    return {
+      creditCards: creditCards.map(creditCard => toCreditCard(creditCard))
+    }
+  }
+
   async createHouseholdCreditCard(householdId: string, userId: string, input: SaveCreditCardDto) {
     await this.requireHouseholdUser(householdId, userId)
 
