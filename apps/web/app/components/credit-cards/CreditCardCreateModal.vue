@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import type {
-  CreditCardCreateFormContext,
+  CreditCardCreateFormSubmitEvent,
   CreditCardFormData,
-  CreditCardFormSubmitEvent,
   SaveCreditCardInput
 } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
@@ -14,6 +13,7 @@ defineOptions({
 
 const householdAssignmentValue = 'household'
 const creditCardsStore = useCreditCardsStore()
+const householdStore = useHouseholdStore()
 const { formatDateToString, getToday } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
@@ -24,7 +24,7 @@ const emit = defineEmits<{
 
 const isOpen = ref<boolean>(false)
 const isSaving = ref<boolean>(false)
-const context = ref<CreditCardCreateFormContext | null>(null)
+const selectedUserId = ref<string | null>(null)
 const formData = reactive<CreditCardFormData>({
   name: '',
   userId: '',
@@ -33,11 +33,9 @@ const formData = reactive<CreditCardFormData>({
   limit: null
 })
 
-const assignmentOptions = computed(() => context.value?.assignmentOptions || [])
 const dueDateMin = computed(() => formData.startDate || getToday())
 const formSchema = computed(() => z.object({
   name: z.string().trim().min(1, 'Credit card name is required.'),
-  userId: z.string().min(1, 'Assignment is required.'),
   startDate: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Start date is required.')
@@ -51,8 +49,8 @@ const formSchema = computed(() => z.object({
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
   )
 }))
-const canSubmit = computed<boolean>(() => Boolean(context.value?.householdId && !isSaving.value))
-const isDisabled = computed(() => isSaving.value || !context.value?.householdId)
+const canSubmit = computed<boolean>(() => Boolean(householdStore.householdId && !isSaving.value))
+const isDisabled = computed(() => isSaving.value || !householdStore.householdId)
 
 watch(() => formData.startDate, (startDate) => {
   if (startDate && formData.dueDate && formData.dueDate < startDate) {
@@ -60,8 +58,8 @@ watch(() => formData.startDate, (startDate) => {
   }
 })
 
-function open(formContext: CreditCardCreateFormContext) {
-  context.value = formContext
+function open(userId: string | null) {
+  selectedUserId.value = userId
   resetForm()
   isOpen.value = true
   focusNameInput()
@@ -80,13 +78,13 @@ function handleClose() {
     return
   }
 
-  context.value = null
+  selectedUserId.value = null
   resetForm()
   emit('closed')
 }
 
-async function save(event: CreditCardFormSubmitEvent) {
-  if (!context.value?.householdId) {
+async function save(event: CreditCardCreateFormSubmitEvent) {
+  if (!householdStore.householdId) {
     return
   }
 
@@ -95,16 +93,16 @@ async function save(event: CreditCardFormSubmitEvent) {
   try {
     const input: SaveCreditCardInput = {
       name: event.data.name.trim(),
-      userId: getCreditCardUserId(event.data.userId),
+      userId: selectedUserId.value,
       startDate: formatDateToString(event.data.startDate),
       dueDate: formatDateToString(event.data.dueDate),
       limit: event.data.limit
     }
 
-    if (input.userId) {
-      await creditCardsStore.createUserCreditCard(input.userId, input)
+    if (selectedUserId.value) {
+      await creditCardsStore.createUserCreditCard(selectedUserId.value, input)
     } else {
-      await creditCardsStore.createHouseholdCreditCard(context.value.householdId, input)
+      await creditCardsStore.createHouseholdCreditCard(householdStore.householdId, input)
     }
 
     addSuccessToast('Credit card created.')
@@ -119,18 +117,10 @@ async function save(event: CreditCardFormSubmitEvent) {
 
 function resetForm() {
   formData.name = ''
-  formData.userId = context.value?.defaultUserId || ''
+  formData.userId = selectedUserId.value || householdAssignmentValue
   formData.startDate = getToday()
   formData.dueDate = getToday()
   formData.limit = null
-}
-
-function getCreditCardUserId(formUserId: string) {
-  if (!context.value?.hasMultipleMembers) {
-    return context.value?.currentUserId || null
-  }
-
-  return formUserId === householdAssignmentValue ? null : formUserId
 }
 
 function focusNameInput() {
@@ -172,20 +162,6 @@ defineExpose({
             v-model="formData.name"
             class="w-full"
             placeholder="Sapphire Preferred"
-            :disabled="isDisabled"
-          />
-        </UFormField>
-
-        <UFormField
-          label="Assignment"
-          name="userId"
-          required
-        >
-          <USelect
-            id="credit-card-create-assignment"
-            v-model="formData.userId"
-            class="w-full"
-            :items="assignmentOptions"
             :disabled="isDisabled"
           />
         </UFormField>

@@ -42,10 +42,6 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
     }))
   ]
 })
-
-if (import.meta.client && !householdStore.isLoaded) {
-  void householdStore.fetchHousehold()
-}
 </script>
 
 <template>

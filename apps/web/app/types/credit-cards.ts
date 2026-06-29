@@ -60,23 +60,15 @@ export type CreditCardFormSubmitEvent = {
   data: CreditCardFormSubmitData
 }
 
-export type CreditCardAssignmentOption = {
-  label: string
-  value: string
+export type CreditCardCreateFormSubmitData = {
+  name: string
+  startDate: Date
+  dueDate: Date
+  limit: number
 }
 
-export type CreditCardCreateFormContext = {
-  assignmentOptions: CreditCardAssignmentOption[]
-  currentUserId: string
-  defaultUserId: string
-  hasMultipleMembers: boolean
-  householdId: string
-}
-
-export type CreditCardEditFormContext = {
-  assignmentOptions: CreditCardAssignmentOption[]
-  currentUserId: string
-  hasMultipleMembers: boolean
+export type CreditCardCreateFormSubmitEvent = {
+  data: CreditCardCreateFormSubmitData
 }
 
 export type CancelCreditCardInput = {

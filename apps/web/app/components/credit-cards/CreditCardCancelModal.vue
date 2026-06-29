@@ -9,7 +9,7 @@ import type {
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
 defineOptions({
-  name: 'CreditCardCloseModal'
+  name: 'CreditCardCancelModal'
 })
 
 const creditCardsStore = useCreditCardsStore()

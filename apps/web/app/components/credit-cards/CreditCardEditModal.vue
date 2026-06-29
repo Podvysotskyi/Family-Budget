@@ -2,7 +2,6 @@
 import { z } from 'zod'
 import type {
   CreditCard,
-  CreditCardEditFormContext,
   CreditCardFormData,
   CreditCardFormSubmitEvent,
   SaveCreditCardInput
@@ -14,7 +13,9 @@ defineOptions({
 })
 
 const householdAssignmentValue = 'household'
+const authStore = useAuthStore()
 const creditCardsStore = useCreditCardsStore()
+const householdStore = useHouseholdStore()
 const { formatDateToString, getToday, parseDateString } = useDateUtils()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
@@ -26,7 +27,6 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
-const context = ref<CreditCardEditFormContext | null>(null)
 const formData = reactive<CreditCardFormData>({
   name: '',
   userId: '',
@@ -35,7 +35,23 @@ const formData = reactive<CreditCardFormData>({
   limit: null
 })
 
-const assignmentOptions = computed(() => context.value?.assignmentOptions || [])
+const hasMultipleMembers = computed(() => householdStore.membersCount > 1)
+const assignmentOptions = computed(() => {
+  return [
+    ...(hasMultipleMembers.value
+      ? [{
+          label: 'Household',
+          value: householdAssignmentValue
+        }]
+      : []),
+    ...(authStore.user
+      ? [{
+          label: authStore.user.name || authStore.user.email,
+          value: authStore.user.id
+        }]
+      : [])
+  ]
+})
 const dueDateMin = computed(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
 const formSchema = computed(() => z.object({
   name: z.string().trim().min(1, 'Credit card name is required.'),
@@ -53,15 +69,14 @@ const formSchema = computed(() => z.object({
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
   )
 }))
-const canSubmit = computed(() => Boolean(selectedCreditCard.value && context.value && !isSaving.value))
-const isDisabled = computed(() => isSaving.value || !context.value)
+const canSubmit = computed(() => Boolean(selectedCreditCard.value && !isSaving.value))
+const isDisabled = computed(() => isSaving.value || !selectedCreditCard.value)
 
-function open(creditCard: CreditCard, formContext: CreditCardEditFormContext) {
+function open(creditCard: CreditCard) {
   if (creditCard.endDate) {
     return
   }
 
-  context.value = formContext
   selectedCreditCard.value = creditCard
   resetForm(creditCard)
   isOpen.value = true
@@ -82,13 +97,12 @@ function handleClose() {
   }
 
   selectedCreditCard.value = null
-  context.value = null
   resetForm()
   emit('closed')
 }
 
 async function save(event: CreditCardFormSubmitEvent) {
-  if (!selectedCreditCard.value || !context.value) {
+  if (!selectedCreditCard.value) {
     return
   }
 
@@ -125,7 +139,7 @@ function resetForm(creditCard?: CreditCard) {
 }
 
 function getDefaultUserId(creditCard?: CreditCard) {
-  if (!creditCard || !context.value) {
+  if (!creditCard) {
     return ''
   }
 
@@ -133,12 +147,12 @@ function getDefaultUserId(creditCard?: CreditCard) {
     return creditCard.userId
   }
 
-  return context.value.hasMultipleMembers ? householdAssignmentValue : context.value.currentUserId
+  return hasMultipleMembers.value ? householdAssignmentValue : authStore.userId
 }
 
 function getCreditCardUserId(formUserId: string) {
-  if (!context.value?.hasMultipleMembers) {
-    return context.value?.currentUserId || null
+  if (!hasMultipleMembers.value) {
+    return authStore.userId || null
   }
 
   return formUserId === householdAssignmentValue ? null : formUserId

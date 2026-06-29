@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import type { CreditCard } from '~/types/credit-cards'
+import {useAuthStore} from "~/stores/auth";
 
 defineOptions({
   name: 'CreditCardsPageListItem'
 })
+
+const authStore = useAuthStore()
+const { formatCurrency } = useCurrencyUtils()
+const { formatDateString } = useDateUtils()
 
 const props = defineProps<{
   creditCard: CreditCard
@@ -15,9 +20,9 @@ const emit = defineEmits<{
   updateBalance: [creditCard: CreditCard]
 }>()
 
-const { formatCurrency } = useCurrencyUtils()
-const { formatDateString } = useDateUtils()
-const assignmentLabel = computed(() => {
+const canEditCreditCard = computed<boolean>(() => props.creditCard.userId === null || props.creditCard.userId === authStore.userId)
+
+const assignmentLabel = computed<string>(() => {
   if (!props.creditCard.user) {
     return 'Household'
   }
@@ -65,7 +70,7 @@ const assignmentLabel = computed(() => {
       </p>
     </div>
 
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1" v-if="canEditCreditCard">
       <UButton
         v-if="!creditCard.endDate"
         icon="i-lucide-wallet"
