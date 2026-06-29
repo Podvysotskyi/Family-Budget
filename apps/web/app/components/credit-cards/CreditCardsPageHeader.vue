@@ -38,7 +38,7 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
         }]
       : []),
     ...householdStore.members.map(member => ({
-      label: member.name || 'Household member',
+      label: member.name,
       icon: member.userId === props.userId ? 'i-lucide-circle-dot' : 'i-lucide-circle',
       to: `/credit-cards/${encodeURIComponent(member.userId)}`,
       active: member.userId === props.userId

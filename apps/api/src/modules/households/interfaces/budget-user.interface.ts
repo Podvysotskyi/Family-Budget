@@ -2,7 +2,7 @@ export interface BudgetUser {
   householdId: string
   householdName: string
   userId: string
-  name?: string | null
+  name: string
   email: string
   avatarUrl?: string | null
 }

@@ -55,8 +55,8 @@ async function saveHouseholdName() {
   }
 }
 
-function getMemberDisplayName(member: { name?: string | null }) {
-  return member.name || 'Household member'
+function getMemberDisplayName(member: { name: string }) {
+  return member.name
 }
 </script>
 

@@ -7,7 +7,7 @@ export type Subscription = {
   userId: string | null
   user: {
     userId: string
-    name?: string | null
+    name: string
     email: string
     avatarUrl?: string | null
   } | null

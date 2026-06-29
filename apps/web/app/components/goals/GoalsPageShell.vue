@@ -41,7 +41,7 @@ const assignmentOptions = computed(() => {
     },
     ...(dashboardStore.user
       ? [{
-          label: dashboardStore.user.name || dashboardStore.user.email,
+          label: dashboardStore.user.name,
           value: dashboardStore.user.id
         }]
       : [])
@@ -286,7 +286,7 @@ function getGoalAssignmentLabel(goal: Goal) {
     return 'Household'
   }
 
-  return goal.user.name || goal.user.email
+  return goal.user.name
 }
 
 function isActiveGoal(goal: Goal) {

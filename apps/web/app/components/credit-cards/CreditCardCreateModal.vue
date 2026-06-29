@@ -50,7 +50,7 @@ const formSchema = computed(() => z.object({
   )
 }))
 const canSubmit = computed<boolean>(() => Boolean(householdStore.householdId && !isSaving.value))
-const isDisabled = computed(() => isSaving.value || !householdStore.householdId)
+const isDisabled = computed<boolean>(() => isSaving.value || !householdStore.householdId)
 
 watch(() => formData.startDate, (startDate) => {
   if (startDate && formData.dueDate && formData.dueDate < startDate) {

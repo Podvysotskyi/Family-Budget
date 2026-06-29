@@ -7,7 +7,7 @@ const oauthStateCookieName = 'family-budget.oauth-state'
 export interface SessionUser {
   id: string
   email: string
-  name?: string | null
+  name: string
   avatarUrl?: string | null
 }
 

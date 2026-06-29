@@ -33,7 +33,7 @@ export class UsersRepository {
     return this.usersRepository.save(this.usersRepository.create({
       email: profile.email,
       googleId: profile.googleId,
-      name: profile.name || null,
+      name: getUserName(profile),
       avatarUrl: profile.avatarUrl || null,
       householdId
     }))
@@ -50,7 +50,7 @@ export class UsersRepository {
 
     this.usersRepository.merge(user, {
       googleId: profile.googleId,
-      name: profile.name || null,
+      name: getUserName(profile),
       avatarUrl: profile.avatarUrl || null
     })
 
@@ -150,4 +150,8 @@ export class UsersRepository {
       avatarUrl: user.avatarUrl
     }
   }
+}
+
+function getUserName(profile: UpsertGoogleUserDto) {
+  return profile.name?.trim() || profile.email
 }

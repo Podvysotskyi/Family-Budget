@@ -2,8 +2,8 @@
 import { z } from 'zod'
 import type {
   CreditCard,
-  CreditCardFormData,
-  CreditCardFormSubmitEvent,
+  CreditCardEditFormData,
+  CreditCardEditFormSubmitEvent,
   SaveCreditCardInput
 } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
@@ -12,7 +12,6 @@ defineOptions({
   name: 'CreditCardEditModal'
 })
 
-const householdAssignmentValue = 'household'
 const authStore = useAuthStore()
 const creditCardsStore = useCreditCardsStore()
 const householdStore = useHouseholdStore()
@@ -27,10 +26,9 @@ const emit = defineEmits<{
 const isOpen = ref(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref(false)
-const formData = reactive<CreditCardFormData>({
+const formData = reactive<CreditCardEditFormData>({
   name: '',
   userId: '',
-  startDate: null,
   dueDate: null,
   limit: null
 })
@@ -41,25 +39,27 @@ const assignmentOptions = computed(() => {
     ...(hasMultipleMembers.value
       ? [{
           label: 'Household',
-          value: householdAssignmentValue
+          value: ''
         }]
       : []),
     ...(authStore.user
       ? [{
-          label: authStore.user.name || authStore.user.email,
+          label: authStore.user.name,
           value: authStore.user.id
         }]
       : [])
   ]
 })
-const dueDateMin = computed(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
+const dueDateMin = computed<Date>(() => {
+  if (!selectedCreditCard.value) {
+    return getToday()
+  }
+
+  return parseDateString(selectedCreditCard.value.startDate) || getToday()
+})
 const formSchema = computed(() => z.object({
   name: z.string().trim().min(1, 'Credit card name is required.'),
-  userId: z.string().min(1, 'Assignment is required.'),
-  startDate: z.preprocess(
-    value => value === null ? undefined : value,
-    z.date('Start date is required.')
-  ),
+  userId: z.string(),
   dueDate: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Due date is required.').min(dueDateMin.value, 'Due date must be on or after the start date.')
@@ -69,8 +69,6 @@ const formSchema = computed(() => z.object({
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
   )
 }))
-const canSubmit = computed(() => Boolean(selectedCreditCard.value && !isSaving.value))
-const isDisabled = computed(() => isSaving.value || !selectedCreditCard.value)
 
 function open(creditCard: CreditCard) {
   if (creditCard.endDate) {
@@ -80,7 +78,6 @@ function open(creditCard: CreditCard) {
   selectedCreditCard.value = creditCard
   resetForm(creditCard)
   isOpen.value = true
-  focusNameInput()
 }
 
 function close(force = false) {
@@ -101,7 +98,7 @@ function handleClose() {
   emit('closed')
 }
 
-async function save(event: CreditCardFormSubmitEvent) {
+async function save(event: CreditCardEditFormSubmitEvent) {
   if (!selectedCreditCard.value) {
     return
   }
@@ -111,7 +108,7 @@ async function save(event: CreditCardFormSubmitEvent) {
   try {
     const input: SaveCreditCardInput = {
       name: event.data.name.trim(),
-      userId: getCreditCardUserId(event.data.userId),
+      userId: event.data.userId || null,
       dueDate: formatDateToString(event.data.dueDate),
       limit: event.data.limit,
       startDate: selectedCreditCard.value.startDate
@@ -129,39 +126,10 @@ async function save(event: CreditCardFormSubmitEvent) {
 }
 
 function resetForm(creditCard?: CreditCard) {
-  const latestLimit = creditCard?.limits[0]
-
   formData.name = creditCard?.name || ''
-  formData.userId = getDefaultUserId(creditCard)
-  formData.startDate = creditCard ? parseDateString(creditCard.startDate) : null
+  formData.userId = creditCard?.user?.userId || ''
   formData.dueDate = creditCard ? parseDateString(creditCard.dueDate) : null
-  formData.limit = creditCard?.currentLimit ?? latestLimit?.limit ?? null
-}
-
-function getDefaultUserId(creditCard?: CreditCard) {
-  if (!creditCard) {
-    return ''
-  }
-
-  if (creditCard.userId) {
-    return creditCard.userId
-  }
-
-  return hasMultipleMembers.value ? householdAssignmentValue : authStore.userId
-}
-
-function getCreditCardUserId(formUserId: string) {
-  if (!hasMultipleMembers.value) {
-    return authStore.userId || null
-  }
-
-  return formUserId === householdAssignmentValue ? null : formUserId
-}
-
-function focusNameInput() {
-  if (import.meta.client) {
-    nextTick(() => document.getElementById('credit-card-edit-name')?.focus())
-  }
+  formData.limit = creditCard?.currentLimit ?? null
 }
 
 defineExpose({
@@ -197,7 +165,7 @@ defineExpose({
             v-model="formData.name"
             class="w-full"
             placeholder="Sapphire Preferred"
-            :disabled="isDisabled"
+            :disabled="isSaving"
           />
         </UFormField>
 
@@ -211,7 +179,7 @@ defineExpose({
             v-model="formData.userId"
             class="w-full"
             :items="assignmentOptions"
-            :disabled="isDisabled"
+            :disabled="isSaving || !hasMultipleMembers"
           />
         </UFormField>
 
@@ -225,7 +193,7 @@ defineExpose({
             v-model="formData.dueDate"
             empty-label="Select due date"
             :min="dueDateMin"
-            :disabled="isDisabled"
+            :disabled="isSaving"
           />
         </UFormField>
 
@@ -243,7 +211,7 @@ defineExpose({
             min="0.01"
             step="0.01"
             placeholder="0.00"
-            :disabled="isDisabled"
+            :disabled="isSaving"
           />
         </UFormField>
       </UForm>
@@ -263,7 +231,7 @@ defineExpose({
           label="Save credit card"
           type="submit"
           form="credit-card-edit-form"
-          :disabled="!canSubmit"
+          :disabled="isSaving"
           :loading="isSaving"
         />
       </div>

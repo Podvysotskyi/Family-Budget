@@ -63,7 +63,7 @@ const subscriptionNavigationItems = computed<NavigationMenuItem[]>(() => {
         }]
       : []),
     ...members.value.map(member => ({
-      label: member.name || member.email,
+      label: member.name,
       icon: member.userId === assignmentFilter.value ? 'i-lucide-circle-dot' : 'i-lucide-circle',
       to: buildSubscriptionAssignmentPath(member.userId),
       active: member.userId === assignmentFilter.value
@@ -353,7 +353,7 @@ function getSubscriptionAssignmentLabel(subscription: Subscription) {
     return 'Household'
   }
 
-  return subscription.user.name || subscription.user.email
+  return subscription.user.name
 }
 
 function getSubscriptionTypeLabel(type: SubscriptionType) {

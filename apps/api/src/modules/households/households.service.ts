@@ -1415,8 +1415,6 @@ function toSubscription(subscription: SubscriptionEntity) {
 }
 
 function toCreditCard(creditCard: CreditCardEntity, assignedUser: HouseholdMember | null = null) {
-  const sortedLimits = [...(creditCard.limits || [])]
-    .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))
   const user = creditCard.user
     ? {
         userId: creditCard.user.id,
@@ -1435,29 +1433,13 @@ function toCreditCard(creditCard: CreditCardEntity, assignedUser: HouseholdMembe
 
   return {
     id: creditCard.id,
-    householdId: creditCard.householdId,
     name: creditCard.name,
-    userId: creditCard.userId || assignedUser?.userId || null,
     user,
     startDate: creditCard.startDate,
     endDate: creditCard.endDate,
     dueDate: creditCard.dueDate,
     currentBalance: getCreditCardBalanceForDate(creditCard, getCurrentDateKey()),
-    currentLimit: getCreditCardLimitForDate(creditCard, getCurrentDateKey()),
-    balances: [...(creditCard.balances || [])]
-      .sort((first, second) => second.date.localeCompare(first.date))
-      .map(balance => ({
-        id: balance.id,
-        date: balance.date,
-        balance: balance.balance
-      })),
-    limits: sortedLimits.map(limit => ({
-      id: limit.id,
-      date: limit.date,
-      limit: limit.limit
-    })),
-    createdAt: creditCard.createdAt,
-    updatedAt: creditCard.updatedAt
+    currentLimit: getCreditCardLimitForDate(creditCard, getCurrentDateKey())
   }
 }
 

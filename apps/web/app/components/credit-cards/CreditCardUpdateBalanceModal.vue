@@ -37,8 +37,6 @@ const formSchema = computed(() => z.object({
   )
 }))
 
-const canSubmit = computed(() => Boolean(selectedCreditCard.value && !isSaving.value))
-
 function open(creditCard: CreditCard) {
   if (creditCard.endDate) {
     return
@@ -176,7 +174,7 @@ defineExpose({
           label="Save balance"
           type="submit"
           form="credit-card-balance-form"
-          :disabled="!canSubmit"
+          :disabled="isSaving"
           :loading="isSaving"
         />
       </div>

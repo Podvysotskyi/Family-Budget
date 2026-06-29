@@ -18,8 +18,8 @@ export class UserEntity {
   @Column({ type: 'text' })
   email!: string
 
-  @Column({ type: 'text', nullable: true })
-  name!: string | null
+  @Column({ type: 'text' })
+  name!: string
 
   @Column({ name: 'avatar_url', type: 'text', nullable: true })
   avatarUrl!: string | null

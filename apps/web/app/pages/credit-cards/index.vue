@@ -12,18 +12,19 @@ definePageMeta({
 })
 
 const authStore = useAuthStore()
-const creditCardsStore = useCreditCardsStore()
 const householdStore = useHouseholdStore()
-await Promise.all([
-  authStore.checkSession(),
-  householdStore.isLoaded ? Promise.resolve() : householdStore.fetchHousehold()
-])
+const creditCardsStore = useCreditCardsStore()
 
-await refresh()
+const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || creditCardsStore.isLoading)
 
 async function refresh() {
   await creditCardsStore.fetchHouseholdCreditCards(householdStore.householdId)
 }
+
+await Promise.all([
+  householdStore.fetchHousehold(),
+  refresh()
+])
 </script>
 
 <template>
@@ -34,8 +35,8 @@ async function refresh() {
     />
 
     <CreditCardsPageList
-      :credit-cards="creditCardsStore.householdCreditCardList"
-      :is-loading="creditCardsStore.isLoading"
+      :credit-cards="creditCardsStore.householdCreditCards"
+      :is-loading="isLoading"
       @refresh="refresh"
     />
   </UContainer>

@@ -41,7 +41,6 @@ const filteredCreditCards = computed<CreditCard[]>(() => {
       class="space-y-3 p-5"
     >
       <USkeleton class="h-16 w-full" />
-      <USkeleton class="h-16 w-full" />
     </div>
 
     <div

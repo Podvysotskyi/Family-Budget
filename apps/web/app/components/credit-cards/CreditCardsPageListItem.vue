@@ -25,7 +25,7 @@ const creditCardCancelModal = ref<InstanceType<typeof CreditCardCancelModal> | n
 const creditCardEditModal = ref<InstanceType<typeof CreditCardEditModal> | null>(null)
 const creditCardUpdateBalanceModal = ref<InstanceType<typeof CreditCardUpdateBalanceModal> | null>(null)
 
-const canEditCreditCard = computed<boolean>(() => props.creditCard.userId === null || props.creditCard.userId === authStore.userId)
+const canEditCreditCard = computed<boolean>(() => !props.creditCard.user || props.creditCard.user.userId === authStore.userId)
 const canUpdateCreditCard = computed<boolean>(() => canEditCreditCard.value && !props.creditCard.endDate)
 
 const assignmentLabel = computed<string>(() => {
@@ -33,7 +33,7 @@ const assignmentLabel = computed<string>(() => {
     return 'Household'
   }
 
-  return props.creditCard.user.name || props.creditCard.user.email
+  return props.creditCard.user.name
 })
 
 function updateBalance() {

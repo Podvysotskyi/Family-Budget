@@ -1,23 +1,9 @@
-export type CreditCardLimit = {
-  id: string
-  date: string
-  limit: number
-}
-
-export type CreditCardBalance = {
-  id: string
-  date: string
-  balance: number
-}
-
 export type CreditCard = {
   id: string
-  householdId: string
   name: string
-  userId: string | null
   user: {
     userId: string
-    name?: string | null
+    name: string
     email: string
     avatarUrl?: string | null
   } | null
@@ -26,10 +12,6 @@ export type CreditCard = {
   dueDate: string
   currentBalance: number | null
   currentLimit: number | null
-  balances: CreditCardBalance[]
-  limits: CreditCardLimit[]
-  createdAt: string
-  updatedAt: string
 }
 
 export type SaveCreditCardInput = {
@@ -48,16 +30,22 @@ export type CreditCardFormData = {
   limit: number | null
 }
 
-export type CreditCardFormSubmitData = {
+export type CreditCardEditFormData = {
   name: string
   userId: string
-  startDate: Date
+  dueDate: Date | null
+  limit: number | null
+}
+
+export type CreditCardEditFormSubmitData = {
+  name: string
+  userId: string
   dueDate: Date
   limit: number
 }
 
-export type CreditCardFormSubmitEvent = {
-  data: CreditCardFormSubmitData
+export type CreditCardEditFormSubmitEvent = {
+  data: CreditCardEditFormSubmitData
 }
 
 export type CreditCardCreateFormSubmitData = {

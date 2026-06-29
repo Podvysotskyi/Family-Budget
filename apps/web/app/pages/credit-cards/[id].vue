@@ -17,33 +17,31 @@ const householdStore = useHouseholdStore()
 const creditCardsStore = useCreditCardsStore()
 
 const routeUserId = computed<string>(() => String(route.params.id || '').trim())
-const selectedUserId = computed<string>(() => routeUserId.value)
 
 const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || creditCardsStore.isLoading)
 
 async function refresh() {
-  await creditCardsStore.fetchUserCreditCards(selectedUserId.value)
+  await creditCardsStore.fetchUserCreditCards(routeUserId.value)
 }
 
 watch(routeUserId, async () => {
   await refresh()
-})
+}, {immediate: true})
 
-if (import.meta.client) {
-  void householdStore.fetchHousehold()
-  void refresh()
-}
+await Promise.all([
+  householdStore.fetchHousehold(),
+])
 </script>
 
 <template>
   <UContainer class="py-6">
     <CreditCardsPageHeader
-      :user-id="selectedUserId"
+      :user-id="routeUserId"
       @refresh="refresh"
     />
 
     <CreditCardsPageList
-      :credit-cards="creditCardsStore.userCreditCardList(selectedUserId)"
+      :credit-cards="creditCardsStore.userCreditCardList(routeUserId)"
       :is-loading="isLoading"
       @refresh="refresh"
     />

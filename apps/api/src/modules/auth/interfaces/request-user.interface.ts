@@ -1,6 +1,6 @@
 export interface RequestUser {
   id: string
   email: string
-  name?: string | null
+  name: string
   avatarUrl?: string | null
 }

@@ -23,7 +23,7 @@ const budgetTitle = computed(() => {
     return 'Household budget'
   }
 
-  const userName = selectedBudgetUser.value?.name || selectedBudgetUser.value?.email
+  const userName = selectedBudgetUser.value?.name
 
   return userName ? `${userName} budget` : 'User budget'
 })
@@ -38,7 +38,7 @@ const budgetUserNavigationItems = computed<NavigationMenuItem[]>(() => [
       }]
     : []),
   ...dashboardStore.members.map(member => ({
-    label: member.name || member.email,
+    label: member.name,
     icon: member.userId === selectedBudgetUserId.value ? 'i-lucide-circle-dot' : 'i-lucide-circle',
     to: buildBudgetUserPath(member.userId),
     active: member.userId === selectedBudgetUserId.value

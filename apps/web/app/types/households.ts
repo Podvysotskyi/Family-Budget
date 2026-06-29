@@ -5,6 +5,6 @@ export type Household = {
 
 export type HouseholdMember = {
   userId: string
-  name: string | null
+  name: string
   avatarUrl: string | null
 }

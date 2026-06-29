@@ -2,6 +2,7 @@ import type { Household, HouseholdMember } from '~/types/households'
 
 const { createAbortController } = useAbortController()
 const { get, patch } = useStoreApi()
+const { addErrorToast } = useAppToast()
 const { waitUntil } = useWaitUntil()
 
 export const useHouseholdStore = defineStore('household', {
@@ -30,8 +31,12 @@ export const useHouseholdStore = defineStore('household', {
   },
 
   actions: {
-    async fetchHousehold() {
-      if (this.loading) {
+    async fetchHousehold(force: boolean = false) {
+      if (!force && this.isLoaded) {
+        return
+      }
+
+      if (this.isLoading) {
         await waitUntil(() => !this.loading)
 
         return
@@ -48,7 +53,7 @@ export const useHouseholdStore = defineStore('household', {
         this.household = response.household
         this.householdMembers = response.members
       } catch {
-        useAppToast().addErrorToast('Household could not be loaded')
+        addErrorToast('Household could not be loaded')
       } finally {
         this.loading = false
       }
@@ -77,7 +82,7 @@ export const useHouseholdStore = defineStore('household', {
         return true
       } catch (error) {
         if (!abortController.signal.aborted) {
-          useAppToast().addErrorToast('Household name could not be saved')
+          addErrorToast('Household name could not be saved')
         }
 
         return false
