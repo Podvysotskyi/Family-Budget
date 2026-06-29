@@ -93,9 +93,9 @@ async function save(event: CreditCardUpdateBalanceSubmitEvent) {
 
 function resetForm(creditCard?: CreditCard) {
   formData.date = creditCard ? getDefaultBalanceDate(creditCard) : null
-  formData.balance = creditCard?.currentBalance === null || creditCard?.currentBalance === undefined
-    ? null
-    : creditCard.currentBalance
+  formData.balance = creditCard
+    ? creditCard.currentBalance ?? 0
+    : null
 }
 
 function getDefaultBalanceDate(creditCard: CreditCard) {
