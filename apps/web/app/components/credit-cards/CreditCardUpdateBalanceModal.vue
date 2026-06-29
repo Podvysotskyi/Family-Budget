@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { z } from 'zod'
-import type { CreditCardUpdateBalanceFormData, CreditCardUpdateBalanceSubmitEvent } from '~/types/credit-card-update-balance'
+import type {
+  CreditCardUpdateBalanceFormData,
+  CreditCardUpdateBalanceSubmitData,
+  CreditCardUpdateBalanceSubmitEvent
+} from '~/types/credit-card-update-balance'
 import type { CreditCard, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
@@ -17,16 +21,16 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const isOpen = ref(false)
+const isOpen = ref<boolean>(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
-const isSaving = ref(false)
+const isSaving = ref<boolean>(false)
 const formData = reactive<CreditCardUpdateBalanceFormData>({
   date: null,
   balance: null
 })
 
-const minDate = computed(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
-const formSchema = computed(() => z.object({
+const minDate = computed<Date>(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
+const formSchema = computed<z.ZodType<CreditCardUpdateBalanceSubmitData>>(() => z.object({
   date: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Balance date is required.').min(minDate.value, 'Balance date must be on or after the start date.')

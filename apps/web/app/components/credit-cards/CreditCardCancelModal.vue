@@ -4,6 +4,7 @@ import type {
   CreditCard,
   CancelCreditCardInput,
   CreditCardCancellationFormData,
+  CreditCardCancellationSubmitData,
   CreditCardCancellationSubmitEvent
 } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
@@ -21,21 +22,21 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const isOpen = ref(false)
+const isOpen = ref<boolean>(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
-const isSaving = ref(false)
+const isSaving = ref<boolean>(false)
 const formData = reactive<CreditCardCancellationFormData>({
   effectiveDate: null
 })
 
-const minDate = computed(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
-const formSchema = computed(() => z.object({
+const minDate = computed<Date>(() => selectedCreditCard.value ? parseDateString(selectedCreditCard.value.startDate) || getToday() : getToday())
+const formSchema = computed<z.ZodType<CreditCardCancellationSubmitData>>(() => z.object({
   effectiveDate: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Effective date is required.').min(minDate.value, 'Effective date must be on or after the start date.')
   )
 }))
-const canSubmit = computed(() => Boolean(selectedCreditCard.value && !isSaving.value))
+const canSubmit = computed<boolean>(() => Boolean(selectedCreditCard.value && !isSaving.value))
 
 function open(creditCard: CreditCard) {
   if (creditCard.endDate) {

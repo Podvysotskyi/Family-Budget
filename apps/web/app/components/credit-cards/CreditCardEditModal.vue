@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type {
   CreditCard,
   CreditCardEditFormData,
+  CreditCardEditFormSubmitData,
   CreditCardEditFormSubmitEvent,
   SaveCreditCardInput
 } from '~/types/credit-cards'
@@ -23,9 +24,9 @@ const emit = defineEmits<{
   saved: []
 }>()
 
-const isOpen = ref(false)
+const isOpen = ref<boolean>(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
-const isSaving = ref(false)
+const isSaving = ref<boolean>(false)
 const formData = reactive<CreditCardEditFormData>({
   name: '',
   userId: '',
@@ -33,8 +34,8 @@ const formData = reactive<CreditCardEditFormData>({
   limit: null
 })
 
-const hasMultipleMembers = computed(() => householdStore.membersCount > 1)
-const assignmentOptions = computed(() => {
+const hasMultipleMembers = computed<boolean>(() => householdStore.membersCount > 1)
+const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
   return [
     ...(hasMultipleMembers.value
       ? [{
@@ -57,7 +58,7 @@ const dueDateMin = computed<Date>(() => {
 
   return parseDateString(selectedCreditCard.value.startDate) || getToday()
 })
-const formSchema = computed(() => z.object({
+const formSchema = computed<z.ZodType<CreditCardEditFormSubmitData>>(() => z.object({
   name: z.string().trim().min(1, 'Credit card name is required.'),
   userId: z.string(),
   dueDate: z.preprocess(
