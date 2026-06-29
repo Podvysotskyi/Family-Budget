@@ -15,6 +15,9 @@ Use this skill when working on forms in `apps/web/app`. Match the pattern establ
 - Keep the save handler responsible for API/store calls. Do not emit raw save events to the parent unless the existing component contract requires it.
 - Disable fields and submit while saving. Do not allow close while saving unless closing is part of a successful save flow.
 - Show success and error feedback with `useAppToast()` helpers, not direct `useToast()` calls in components.
+- Keep form state limited to fields actually rendered in the form. Do not keep hidden context fields in `formData`; store modal context in separate refs.
+- Avoid `canSubmit` and `isDisabled` computed wrappers when the template can directly use `isSaving`.
+- Type `computed` schema declarations with `z.ZodType<SubmitData>` and keep submit event types in `apps/web/app/types`.
 
 ## State And Types
 
@@ -53,6 +56,7 @@ const formSchema = computed(() => z.object({
 
 - Use `superRefine` only for validation that cannot be expressed by field constraints.
 - Keep UI constraints and schema constraints aligned. Example: if `AppDatePicker` has `:min`, the schema should normally enforce the same minimum.
+- If API data guarantees a field is present but the parser can return `null`, either keep a defensive fallback or introduce a stricter helper. Do not use non-null assertions casually.
 
 ## Modals
 
@@ -86,6 +90,7 @@ function close(force = false) {
   - `formatDateToString(date)`
 - Use `AppDatePicker` for date fields.
 - Prefer `Date | null` form state in new/refactored forms; preserve legacy string callers only when changing them would broaden scope.
+- Use a watcher to keep dependent dates valid when users change the minimum date, for example moving `dueDate` up when `startDate` increases.
 
 ## Store And API Boundary
 

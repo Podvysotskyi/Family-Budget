@@ -16,6 +16,7 @@ Agents working here should keep changes narrow, align with existing workspace pa
 - `apps/api/src/modules`: NestJS feature modules
 - `apps/api/src/modules/budget-scheduler`: recurring budget scheduler module
 - `apps/api/src/modules/database/migrations`: TypeORM migrations
+- `docs`: feature behavior and implementation notes that must stay aligned with code
 - `README.md`: local setup and run instructions
 - `PLAN.md`: implementation notes for the scheduler
 
@@ -72,6 +73,15 @@ http://127.0.0.1:3000/auth/google/callback
 - Prefer existing Nx, Nuxt, NestJS, and TypeORM patterns over new abstractions.
 - Keep frontend work inside the existing Nuxt app structure.
 - Keep backend work inside the appropriate NestJS module unless a shared concern clearly warrants extraction.
+
+### Documentation
+
+- Keep docs up to date with the current implementation.
+- When changing feature behavior, API endpoints, data models, ownership rules, UI flows, or scheduler behavior, update the matching document in `docs/` in the same change.
+- If a relevant doc does not exist, create a focused feature doc under `docs/` rather than burying behavior notes in code comments.
+- Treat stale docs as part of the bug: if code and docs disagree, either update the docs or explicitly call out why the docs are intentionally unchanged.
+- Do not create feature-specific Codex skills just to document current implementation; use focused files in `docs/` for that.
+- For credit-card changes, update `docs/credit-cards.md` whenever endpoints, response shape, store flow, modal/page behavior, date handling, or cancellation/balance semantics change.
 
 ### Database And Migrations
 

@@ -5,18 +5,20 @@ description: Implement and refactor modal components in the Family-Budget Nuxt 4
 
 # Nuxt UI Modals
 
-Use this skill when working on modal components in `apps/web/app`. Match the pattern established by `CreditCardBalanceModal.vue`: modal components own their open state when appropriate, expose explicit methods to parents, guard close behavior while saving, and keep save behavior inside the modal when the modal owns the form.
+Use this skill when working on modal components in `apps/web/app`. Match the credit-card modal pattern: modal components own their open state, expose explicit methods to parents, guard close behavior while saving, and keep persistence inside the modal when the modal owns the form.
 
 ## Ownership
 
 - Let a modal own `isOpen` when the parent only needs to launch it.
 - Expose `open(...)` and `close(...)` with `defineExpose`.
-- Pass required domain context into `open(item)`, not through many parent-owned props.
+- Pass required domain context into `open(item)` or `open(contextValue)`, not through many parent-owned props.
 - Keep the selected domain object in a local ref, for example `selectedCreditCard`.
 - Do not show or validate impossible missing-context states when `open(item)` is the only path to display the modal.
+- Type all `ref` and `computed` declarations explicitly, including template refs and schema computed refs.
+- Avoid helper functions that just wrap one expression. Prefer direct payload mapping in `save()` and direct defaults in `resetForm()`.
 
 ```ts
-const isOpen = ref(false)
+const isOpen = ref<boolean>(false)
 const selectedItem = ref<Item | null>(null)
 
 const emit = defineEmits<{
@@ -42,6 +44,7 @@ defineExpose({
 - Keep parent state limited to list/page state and selected action triggers.
 - Do not duplicate modal form state in the parent.
 - When modal-owned persistence changes list data, have the parent refresh from `@created` or `@saved`; do not make Pinia mutation actions refresh list state implicitly.
+- Place action modals at the smallest component that owns the launcher. For row actions, keep edit/update/cancel modals inside the list item and emit `refresh` upward. For header actions, keep create modals inside the header and emit `refresh` upward.
 
 ```ts
 const itemModal = ref<InstanceType<typeof ItemModal> | null>(null)
@@ -66,6 +69,7 @@ function startEditingItem(item: Item) {
 - Keep `close()` focused on guard checks and setting `isOpen.value = false`.
 - Reset selected item, modal context, and form state from a `handleClose()` function wired to `UModal @close`.
 - Initialize form state inside `open(...)` after setting selected item or modal context and before setting `isOpen.value = true`.
+- Keep `@update:open="(value: boolean) => !value && close()"` on `UModal` so all close requests pass through the guarded `close()` function.
 
 ```ts
 function close(force = false) {
@@ -93,6 +97,7 @@ function handleClose() {
 - Emit `saved` after a successful update, cancellation, balance update, or other save-like operation and before `close(true)`.
 - Emit `closed` from `handleClose()` after selected item, context, and form state cleanup.
 - Type modal events with `defineEmits`; do not emit success events from parent-owned click handlers when the modal owns persistence.
+- Intermediate components should normally forward modal success as `refresh`, not expose lower-level modal event names to pages.
 
 ## UModal Props
 
@@ -115,6 +120,7 @@ function handleClose() {
 
 - Keep the save handler inside the modal when the modal owns the form.
 - Use `isSaving` to disable fields, cancel buttons, and submit buttons.
+- Prefer direct `:disabled="isSaving"` unless there is a real second condition, such as disabling an assignment select when there is only one household member.
 - Convert UI form data into store/API payloads inside `save`.
 - Use `useAppToast()` for success and error feedback.
 - Close with `close(true)` after successful persistence.

@@ -16,13 +16,15 @@ Keep reusable Nuxt app types in `apps/web/app/types/` and import them into compo
 - Keep component-local types only when they are purely presentational and not part of a domain, form, modal, store, or composable contract.
 - Do not define reusable types in Pinia stores or large Vue components.
 - Use exported types, not interfaces, unless an existing file consistently uses interfaces.
+- Keep API response/domain types lean. Do not include raw history arrays, timestamps, ownership IDs, or other fields unless the UI actually consumes them.
 
 ## Naming
 
 - Name domain entities directly: `CreditCard`, `CreditCardLimit`, `Subscription`.
 - Name store/API payloads by action and domain: `SaveCreditCardInput`, `CancelCreditCardInput`.
-- Name UI form state separately from API payloads: `CreditCardFormData`, `CreditCardFormSubmitData`, `CreditCardFormSubmitEvent`.
-- Name modal launch context explicitly when a modal is opened through exposed methods: `CreditCardCreateFormContext`, `CreditCardEditFormContext`.
+- Name UI form state separately from API payloads: `CreditCardCreateFormData`, `CreditCardCreateFormSubmitData`, `CreditCardCreateFormSubmitEvent`.
+- Prefer action-specific form names once create/edit forms diverge. Avoid broad names like `CreditCardFormData` when only one action uses the type.
+- Avoid modal context types when a single exposed `open(...)` parameter is clearer.
 - Name option types by domain when they are exported: `CreditCardAssignmentOption`, not a broad `SelectOption`, unless a shared app-wide option type already exists.
 
 ## Forms And Dates
@@ -32,6 +34,7 @@ Keep reusable Nuxt app types in `apps/web/app/types/` and import them into compo
 - Keep submit data non-null when Zod validation guarantees required values.
 - Keep API/store payload types in API shape, usually date strings such as `YYYY-MM-DD`.
 - Convert UI form dates to strings in the submit handler, not in the type definition.
+- If a backend field becomes non-nullable, update API interfaces, web types, and display code so UI no longer carries fallback labels for impossible null values.
 
 ## Refactoring Existing Types
 

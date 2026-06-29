@@ -53,6 +53,8 @@ getters: {
 - Use actions for API calls and mutations only.
 - Keep list fetch actions explicit. Prefer `fetchHouseholdItems(id)` and `fetchUserItems(id)` over one combined fetch when the API has separate household/user endpoints.
 - Keep mutation actions focused on one API request. Do not make create/update/cancel/save actions refresh list state implicitly; parent components should refresh from modal events or explicit flow events.
+- Use separate create actions when the API has different ownership endpoints, for example `createHouseholdItem(householdId, input)` and `createUserItem(userId, input)`.
+- Do not require parent IDs for update/cancel/balance actions when the API endpoint is item-owned, for example `PATCH /items/:id`.
 - Use `useStoreApi`, not direct `$fetch`, inside stores.
 - Destructure request helpers near other composables at module scope:
 
@@ -155,6 +157,8 @@ const { addErrorToast } = useAppToast()
 - Components should call explicit fetch actions for the active list only.
 - Parent components should refresh list data after modal `created` or `saved` events.
 - Keep route/filter selection in the component unless multiple components need the exact same selection state.
+- Components that own modal launchers can translate modal `created`/`saved` to a plain `refresh` event. Pages should handle the actual fetch.
+- Keep stores free of display-only fields and broad cached maps when one active collection is enough. Prefer one household array plus keyed user records only when both ownership modes exist.
 
 ## Types
 
