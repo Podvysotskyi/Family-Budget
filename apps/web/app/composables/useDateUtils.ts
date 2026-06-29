@@ -19,6 +19,19 @@ export function useDateUtils() {
     return `${year}-${month}-${day}`
   }
 
+  function formatDateString(value: string | null, fallback = 'No date') {
+    if (!value) {
+      return fallback
+    }
+
+    return new Date(`${value}T00:00:00.000Z`).toLocaleDateString(undefined, {
+      timeZone: 'UTC',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    })
+  }
+
   function parseDateString(value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       return null
@@ -34,6 +47,7 @@ export function useDateUtils() {
   }
 
   return {
+    formatDateString,
     formatDateToString,
     getToday,
     getTodayDateString,
