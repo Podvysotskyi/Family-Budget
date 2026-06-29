@@ -1,5 +1,7 @@
 import type { IncomeType } from '~/types/income-types'
 
+const { delete: deleteRequest, get, patch, post } = useStoreApi()
+
 export const useIncomeTypesStore = defineStore('incomeTypes', {
   state: () => ({
     errorsByHouseholdId: {} as Record<string, string | null>,
@@ -29,7 +31,7 @@ export const useIncomeTypesStore = defineStore('incomeTypes', {
       this.errorsByHouseholdId[householdId] = null
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           incomeTypes: IncomeType[]
         }>(`/households/${householdId}/income-types`)
 
@@ -42,13 +44,10 @@ export const useIncomeTypesStore = defineStore('incomeTypes', {
     },
 
     async createIncomeType(householdId: string, text: string) {
-      const response = await storeApiFetch<{
+      const response = await post<{
         incomeType: IncomeType
       }>(`/households/${householdId}/income-types`, {
-        method: 'POST',
-        body: {
-          text
-        }
+        text
       })
 
       this.incomeTypesByHouseholdId[householdId] = [
@@ -60,19 +59,14 @@ export const useIncomeTypesStore = defineStore('incomeTypes', {
     },
 
     async updateIncomeType(householdId: string, incomeTypeId: string, text: string) {
-      await storeApiFetch(`/households/${householdId}/income-types/${incomeTypeId}`, {
-        method: 'PATCH',
-        body: {
-          text
-        }
+      await patch(`/households/${householdId}/income-types/${incomeTypeId}`, {
+        text
       })
       await this.fetchIncomeTypes(householdId)
     },
 
     async deleteIncomeType(householdId: string, incomeTypeId: string) {
-      await storeApiFetch(`/households/${householdId}/income-types/${incomeTypeId}`, {
-        method: 'DELETE'
-      })
+      await deleteRequest(`/households/${householdId}/income-types/${incomeTypeId}`)
       await this.fetchIncomeTypes(householdId)
     }
   }

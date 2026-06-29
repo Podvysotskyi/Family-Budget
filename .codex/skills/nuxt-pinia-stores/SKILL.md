@@ -1,11 +1,11 @@
 ---
 name: nuxt-pinia-stores
-description: Create and refactor Pinia stores in the Family-Budget Nuxt 4 app using the established storeApiFetch, type-folder, getter/action, abort-controller, and toast-feedback patterns. Use when adding or changing stores in apps/web/app/stores, store-backed API calls, list loading state, cancellation behavior, store getters, or component refresh flows.
+description: Create and refactor Pinia stores in the Family-Budget Nuxt 4 app using the established useStoreApi, type-folder, getter/action, abort-controller, and toast-feedback patterns. Use when adding or changing stores in apps/web/app/stores, store-backed API calls, list loading state, cancellation behavior, store getters, or component refresh flows.
 ---
 
 # Nuxt Pinia Stores
 
-Use this skill when working on Pinia stores in `apps/web/app/stores`. Match the pattern established by `credit-cards.ts`: stores own fetched domain state and API actions, expose read-only derived access through getters, use `storeApiFetch`, keep reusable types in `apps/web/app/types`, and surface user-facing errors with `useAppToast`.
+Use this skill when working on Pinia stores in `apps/web/app/stores`. Match the established store patterns: stores own fetched domain state and API actions, expose read-only derived access through getters, use `useStoreApi`, keep reusable types in `apps/web/app/types`, and surface user-facing errors with `useAppToast`.
 
 ## Store Shape
 
@@ -53,15 +53,18 @@ getters: {
 - Use actions for API calls and mutations only.
 - Keep list fetch actions explicit. Prefer `fetchHouseholdItems(id)` and `fetchUserItems(id)` over one combined fetch when the API has separate household/user endpoints.
 - Keep mutation actions focused on one API request. Do not make create/update/cancel/save actions refresh list state implicitly; parent components should refresh from modal events or explicit flow events.
-- Use `storeApiFetch`, not direct `$fetch`, inside stores.
+- Use `useStoreApi`, not direct `$fetch`, inside stores.
+- Destructure request helpers near other composables at module scope:
+
+```ts
+const { delete: deleteRequest, get, patch, post } = useStoreApi()
+```
+
 - Import store payload and domain types from `~/types/...`.
 
 ```ts
 async updateItem(itemId: string, input: SaveItemInput) {
-  await storeApiFetch(`/items/${itemId}`, {
-    method: 'PATCH',
-    body: input
-  })
+  await patch(`/items/${itemId}`, input)
 }
 ```
 
@@ -69,7 +72,7 @@ async updateItem(itemId: string, input: SaveItemInput) {
 
 - For list fetches that can be superseded by route/filter changes, use `useAbortController()`.
 - Before starting a new list request, create a fresh controller with `createAbortController(this)`; this aborts the previous stored controller.
-- Pass `signal: abortController.signal` to `storeApiFetch`.
+- Pass `signal: abortController.signal` to the `useStoreApi` helper options.
 - Clear the target list before fetching when the selected list changed and stale rows should not remain visible.
 - Set `abortController` to `null` after a successful response.
 - In `finally`, set `loading = false` only if the request was not aborted; an aborted request may have been replaced by a newer in-flight request.
@@ -81,7 +84,7 @@ this.loading = true
 this.householdItems = []
 
 try {
-  const response = await storeApiFetch<{ items: Item[] }>(`/households/${householdId}/items`, {
+  const response = await get<{ items: Item[] }>(`/households/${householdId}/items`, {
     signal: abortController.signal
   })
 
@@ -94,6 +97,42 @@ try {
 } finally {
   if (!abortController.signal.aborted) {
     this.loading = false
+  }
+}
+```
+
+## Save And Update Actions
+
+- Use a dedicated `saving: false` state field for save/update actions that drive submit button loading state.
+- For save/update requests where only the latest submit should win, use `useAbortController()` with the same `abortController` state field.
+- Return `true` or `false` from store actions when the component only needs a success status, and keep response-to-state mapping inside the store.
+- Pass `signal: abortController.signal` as the third argument to `post` or `patch` helpers when the second argument is a request body.
+- Set `abortController` to `null` after a successful response.
+- In `catch`, suppress toast feedback when the request was aborted.
+- In `finally`, set `saving = false` only if the request was not aborted; an aborted save may have been replaced by a newer in-flight save.
+
+```ts
+const abortController = createAbortController(this)
+this.saving = true
+
+try {
+  const response = await patch<{ item: Item }>(`/items/${itemId}`, input, {
+    signal: abortController.signal
+  })
+
+  this.item = response.item
+  this.abortController = null
+
+  return true
+} catch {
+  if (!abortController.signal.aborted) {
+    addErrorToast('Item could not be saved')
+  }
+
+  return false
+} finally {
+  if (!abortController.signal.aborted) {
+    this.saving = false
   }
 }
 ```

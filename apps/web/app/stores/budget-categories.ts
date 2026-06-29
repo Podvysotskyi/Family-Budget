@@ -1,5 +1,7 @@
 import type { BudgetCategory } from '~/types/budget-categories'
 
+const { delete: deleteRequest, get, patch, post } = useStoreApi()
+
 export const useBudgetCategoriesStore = defineStore('budgetCategories', {
   state: () => ({
     categoriesByHouseholdId: {} as Record<string, BudgetCategory[]>,
@@ -29,7 +31,7 @@ export const useBudgetCategoriesStore = defineStore('budgetCategories', {
       this.errorsByHouseholdId[householdId] = null
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           categories: BudgetCategory[]
         }>(`/households/${householdId}/budget-categories`)
 
@@ -42,36 +44,26 @@ export const useBudgetCategoriesStore = defineStore('budgetCategories', {
     },
 
     async createCategory(householdId: string, name: string) {
-      await storeApiFetch(`/households/${householdId}/budget-categories`, {
-        method: 'POST',
-        body: {
-          name
-        }
+      await post(`/households/${householdId}/budget-categories`, {
+        name
       })
       await this.fetchCategories(householdId)
     },
 
     async updateCategory(householdId: string, categoryId: string, name: string) {
-      await storeApiFetch(`/households/${householdId}/budget-categories/${categoryId}`, {
-        method: 'PATCH',
-        body: {
-          name
-        }
+      await patch(`/households/${householdId}/budget-categories/${categoryId}`, {
+        name
       })
       await this.fetchCategories(householdId)
     },
 
     async reorderCategory(householdId: string, categoryId: string, direction: 'up' | 'down') {
-      await storeApiFetch(`/households/${householdId}/budget-categories/${categoryId}/order/${direction}`, {
-        method: 'PATCH'
-      })
+      await patch(`/households/${householdId}/budget-categories/${categoryId}/order/${direction}`)
       await this.fetchCategories(householdId)
     },
 
     async deleteCategory(householdId: string, categoryId: string) {
-      await storeApiFetch(`/households/${householdId}/budget-categories/${categoryId}`, {
-        method: 'DELETE'
-      })
+      await deleteRequest(`/households/${householdId}/budget-categories/${categoryId}`)
       await this.fetchCategories(householdId)
     }
   }

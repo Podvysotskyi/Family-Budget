@@ -12,6 +12,13 @@ import { HouseholdService } from './households.service'
 export class UserBudgetsController {
   constructor(@Inject(HouseholdService) private readonly householdService: HouseholdService) {}
 
+  @Get('household')
+  household(@Req() request: AuthenticatedRequest) {
+    const user = requireRequestUser(request)
+
+    return this.householdService.getHouseholdForCurrentUser(user.id)
+  }
+
   @Get('users/:id/budget-period/month')
   userBudgetMonthPeriod(
     @Param('id') budgetUserId: string,

@@ -1,5 +1,7 @@
 import type { DashboardShell } from '~/types/dashboard'
 
+const { get, patch } = useStoreApi()
+
 export const useDashboardStore = defineStore('dashboard', {
   state: () => ({
     data: null as DashboardShell | null,
@@ -36,7 +38,7 @@ export const useDashboardStore = defineStore('dashboard', {
       this.error = null
 
       try {
-        this.data = await storeApiFetch<DashboardShell>('/dashboard')
+        this.data = await get<DashboardShell>('/dashboard')
         this.isLoaded = true
       } catch {
         this.error = 'Dashboard could not be loaded'
@@ -50,16 +52,13 @@ export const useDashboardStore = defineStore('dashboard', {
         throw new Error('Household is required')
       }
 
-      const response = await storeApiFetch<{
+      const response = await patch<{
         household: {
           householdId: string
           householdName: string
         }
       }>(`/households/${this.householdId}`, {
-        method: 'PATCH',
-        body: {
-          name
-        }
+        name
       })
 
       if (this.data?.household) {

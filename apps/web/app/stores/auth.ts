@@ -1,6 +1,7 @@
 import type { AuthUser } from '~/types/auth'
 
 const sessionRequests = new WeakMap<object, Promise<boolean>>()
+const { get, post } = useStoreApi()
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -25,7 +26,7 @@ export const useAuthStore = defineStore('auth', {
       this.isLoading = true
       this.error = null
 
-      const request = storeApiFetch<{
+      const request = get<{
         user: AuthUser
       }>('/auth/me')
         .then((response) => {
@@ -59,9 +60,7 @@ export const useAuthStore = defineStore('auth', {
     },
 
     async signOut() {
-      await storeApiFetch('/auth/logout', {
-        method: 'POST'
-      }).catch(() => undefined)
+      await post('/auth/logout').catch(() => undefined)
 
       this.reset()
     }

@@ -2,6 +2,7 @@ import type { CancelCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCred
 
 const { createAbortController } = useAbortController()
 const { addErrorToast } = useAppToast()
+const { get, patch, post } = useStoreApi()
 
 export const useCreditCardsStore = defineStore('creditCards', {
   state: () => ({
@@ -39,7 +40,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
       this.householdCreditCards = []
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           creditCards: CreditCard[]
         }>(`/households/${householdId}/credit-cards`, {
           signal: abortController.signal
@@ -69,7 +70,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
       this.userCreditCards[userId] = []
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           creditCards: CreditCard[]
         }>(`/users/${userId}/credit-cards`, {
           signal: abortController.signal
@@ -89,38 +90,23 @@ export const useCreditCardsStore = defineStore('creditCards', {
     },
 
     async createHouseholdCreditCard(householdId: string, input: SaveCreditCardInput) {
-      await storeApiFetch(`/households/${householdId}/credit-cards`, {
-        method: 'POST',
-        body: input
-      })
+      await post(`/households/${householdId}/credit-cards`, input)
     },
 
     async createUserCreditCard(userId: string, input: SaveCreditCardInput) {
-      await storeApiFetch(`/users/${userId}/credit-cards`, {
-        method: 'POST',
-        body: input
-      })
+      await post(`/users/${userId}/credit-cards`, input)
     },
 
     async updateCreditCard(creditCardId: string, input: SaveCreditCardInput) {
-      await storeApiFetch(`/credit-cards/${creditCardId}`, {
-        method: 'PATCH',
-        body: input
-      })
+      await patch(`/credit-cards/${creditCardId}`, input)
     },
 
     async cancelCreditCard(creditCardId: string, input: CancelCreditCardInput) {
-      await storeApiFetch(`/credit-cards/${creditCardId}/cancel`, {
-        method: 'PATCH',
-        body: input
-      })
+      await patch(`/credit-cards/${creditCardId}/cancel`, input)
     },
 
     async updateCreditCardBalance(creditCardId: string, input: UpdateCreditCardBalanceInput) {
-      await storeApiFetch(`/credit-cards/${creditCardId}/balance`, {
-        method: 'PATCH',
-        body: input
-      })
+      await patch(`/credit-cards/${creditCardId}/balance`, input)
     }
   }
 })

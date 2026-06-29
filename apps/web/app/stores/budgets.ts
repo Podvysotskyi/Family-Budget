@@ -1,5 +1,7 @@
 import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment, Income, MonthBudgetResponse, SubscriptionTransaction } from '~/types/budgets'
 
+const { delete: deleteRequest, get, post } = useStoreApi()
+
 export const useBudgetsStore = defineStore('budgets', {
   state: () => ({
     incomeErrorsByBudgetId: {} as Record<string, string | null>,
@@ -83,12 +85,9 @@ export const useBudgetsStore = defineStore('budgets', {
       date: string
       incomeTypeId: string
     }) {
-      const response = await storeApiFetch<{
+      const response = await post<{
         income: Income
-      }>(`/user/${userId}/budget/${budgetId}/income`, {
-        method: 'POST',
-        body: payload
-      })
+      }>(`/user/${userId}/budget/${budgetId}/income`, payload)
 
       this.incomesByBudgetId[budgetId] = [
         ...this.getIncomeEntries(budgetId),
@@ -107,7 +106,7 @@ export const useBudgetsStore = defineStore('budgets', {
       this.incomeErrorsByBudgetId[budgetId] = null
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           incomes: Income[]
         }>(`/user/${userId}/budget/${budgetId}/income`)
 
@@ -134,7 +133,7 @@ export const useBudgetsStore = defineStore('budgets', {
           from_date: fromDate,
           to_date: toDate
         })
-        const response = await storeApiFetch<{
+        const response = await get<{
           subscriptions: BudgetSubscription[]
         }>(`/user/${userId}/subscriptions?${query.toString()}`)
 
@@ -161,7 +160,7 @@ export const useBudgetsStore = defineStore('budgets', {
           from_date: fromDate,
           to_date: toDate
         })
-        const response = await storeApiFetch<{
+        const response = await get<{
           subscription_transactions: SubscriptionTransaction[]
         }>(`/user/${userId}/budget/${budgetId}/transactions?${query.toString()}`)
 
@@ -174,14 +173,11 @@ export const useBudgetsStore = defineStore('budgets', {
     },
 
     async markSubscriptionPaid(userId: string, budgetId: string, subscription: BudgetSubscription) {
-      const response = await storeApiFetch<{
+      const response = await post<{
         subscription_transactions: SubscriptionTransaction[]
       }>(`/user/${userId}/budget/${budgetId}/transactions`, {
-        method: 'POST',
-        body: {
-          subscriptionId: subscription.id,
-          occurrenceDate: subscription.occurrenceDate
-        }
+        subscriptionId: subscription.id,
+        occurrenceDate: subscription.occurrenceDate
       })
       const transaction = response.subscription_transactions[0]
 
@@ -210,11 +206,9 @@ export const useBudgetsStore = defineStore('budgets', {
         return
       }
 
-      await storeApiFetch<{
+      await deleteRequest<{
         deleted: boolean
-      }>(`/user/${userId}/budget/${budgetId}/transactions/${subscription.transactionId}`, {
-        method: 'DELETE'
-      })
+      }>(`/user/${userId}/budget/${budgetId}/transactions/${subscription.transactionId}`)
 
       for (const rangeKey of Object.keys(this.transactionsByRangeKey)) {
         this.transactionsByRangeKey[rangeKey] = this.transactionsByRangeKey[rangeKey]!
@@ -242,7 +236,7 @@ export const useBudgetsStore = defineStore('budgets', {
           year: String(year)
         })
 
-        this.monthBudgetsByKey[key] = await storeApiFetch<MonthBudgetResponse>(`/users/${userId}/budget-period/month?${query.toString()}`)
+        this.monthBudgetsByKey[key] = await get<MonthBudgetResponse>(`/users/${userId}/budget-period/month?${query.toString()}`)
       } catch {
         this.monthBudgetErrorsByKey[key] = 'Budget period could not be loaded'
       } finally {

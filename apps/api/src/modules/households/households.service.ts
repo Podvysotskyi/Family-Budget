@@ -72,6 +72,27 @@ export class HouseholdService {
     }
   }
 
+  async getHouseholdForCurrentUser(userId: string) {
+    const household = await this.usersRepository.findHouseholdByUserId(userId)
+    const members = household
+      ? await this.usersRepository.listByHouseholdId(household.householdId)
+      : []
+
+    return {
+      household: household
+        ? {
+            householdId: household.householdId,
+            householdName: household.householdName
+          }
+        : null,
+      members: members.map(member => ({
+        userId: member.userId,
+        name: member.name,
+        avatarUrl: member.avatarUrl
+      }))
+    }
+  }
+
   async update(householdId: string, userId: string, input: UpdateHouseholdDto) {
     const currentUser = await this.usersRepository.findByHouseholdIdAndUserId(householdId, userId)
 

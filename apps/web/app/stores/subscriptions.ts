@@ -1,5 +1,7 @@
 import type { SaveSubscriptionInput, Subscription } from '~/types/subscriptions'
 
+const { get, patch, post } = useStoreApi()
+
 export const useSubscriptionsStore = defineStore('subscriptions', {
   state: () => ({
     errorsByHouseholdId: {} as Record<string, string | null>,
@@ -29,7 +31,7 @@ export const useSubscriptionsStore = defineStore('subscriptions', {
       this.errorsByHouseholdId[householdId] = null
 
       try {
-        const response = await storeApiFetch<{
+        const response = await get<{
           subscriptions: Subscription[]
         }>(`/households/${householdId}/subscriptions`)
 
@@ -42,18 +44,12 @@ export const useSubscriptionsStore = defineStore('subscriptions', {
     },
 
     async createSubscription(householdId: string, input: SaveSubscriptionInput) {
-      await storeApiFetch(`/households/${householdId}/subscriptions`, {
-        method: 'POST',
-        body: input
-      })
+      await post(`/households/${householdId}/subscriptions`, input)
       await this.fetchSubscriptions(householdId)
     },
 
     async updateSubscription(householdId: string, subscriptionId: string, input: SaveSubscriptionInput) {
-      await storeApiFetch(`/households/${householdId}/subscriptions/${subscriptionId}`, {
-        method: 'PATCH',
-        body: input
-      })
+      await patch(`/households/${householdId}/subscriptions/${subscriptionId}`, input)
       await this.fetchSubscriptions(householdId)
     },
 

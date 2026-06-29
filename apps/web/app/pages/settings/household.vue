@@ -9,13 +9,16 @@ definePageMeta({
 })
 
 const householdName = ref('')
-const isSavingHouseholdName = ref(false)
 const householdNameError = ref<string | null>(null)
 const dashboardStore = useDashboardStore()
-await dashboardStore.fetchDashboard()
-const householdId = computed(() => dashboardStore.householdId)
-const householdMembers = computed(() => dashboardStore.members)
-const savedHouseholdName = computed(() => dashboardStore.householdName)
+const householdStore = useHouseholdStore()
+await Promise.all([
+  dashboardStore.fetchDashboard(),
+  householdStore.isLoaded ? Promise.resolve() : householdStore.fetchHousehold()
+])
+const householdId = computed(() => householdStore.householdId)
+const householdMembers = computed(() => householdStore.members)
+const savedHouseholdName = computed(() => householdStore.householdName)
 const trimmedHouseholdName = computed(() => householdName.value.trim())
 const isHouseholdNameUnchanged = computed(() => trimmedHouseholdName.value === savedHouseholdName.value.trim())
 
@@ -36,32 +39,24 @@ async function saveHouseholdName() {
     return
   }
 
-  isSavingHouseholdName.value = true
-
   try {
-    const household = await dashboardStore.updateHouseholdName(trimmedHouseholdName.value)
-    householdName.value = household.householdName
+    const saved = await householdStore.updateHouseholdName(trimmedHouseholdName.value)
+
+    if (!saved) {
+      householdNameError.value = 'Household name could not be saved.'
+
+      return
+    }
+
+    await dashboardStore.fetchDashboard({ force: true })
+    householdName.value = savedHouseholdName.value
   } catch {
     householdNameError.value = 'Household name could not be saved.'
-  } finally {
-    isSavingHouseholdName.value = false
   }
 }
 
-function getMemberDisplayName(member: { name?: string | null, email: string }) {
-  return member.name || member.email
-}
-
-function formatJoinedDate(value?: string) {
-  if (!value) {
-    return 'Joined date unavailable'
-  }
-
-  return `Joined ${new Date(value).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  })}`
+function getMemberDisplayName(member: { name?: string | null }) {
+  return member.name || 'Household member'
 }
 </script>
 
@@ -78,7 +73,7 @@ function formatJoinedDate(value?: string) {
 
     <section class="rounded-lg border border-default bg-default">
       <div
-        v-if="dashboardStore.error || !dashboardStore.household"
+        v-if="!householdStore.isLoaded"
         class="p-5 text-sm text-muted"
       >
         <UAlert
@@ -105,7 +100,7 @@ function formatJoinedDate(value?: string) {
             id="household-name"
             v-model="householdName"
             class="mt-2 w-full"
-            :disabled="dashboardStore.isLoading || isSavingHouseholdName"
+            :disabled="householdStore.isLoading || householdStore.isSaving"
           />
           <p
             v-if="householdNameError"
@@ -120,8 +115,8 @@ function formatJoinedDate(value?: string) {
           icon="i-lucide-save"
           color="primary"
           label="Save"
-          :disabled="dashboardStore.isLoading || isHouseholdNameUnchanged"
-          :loading="isSavingHouseholdName"
+          :disabled="householdStore.isLoading || isHouseholdNameUnchanged"
+          :loading="householdStore.isSaving"
         />
       </form>
     </section>
@@ -134,14 +129,14 @@ function formatJoinedDate(value?: string) {
       </div>
 
       <div
-        v-if="dashboardStore.error || !dashboardStore.household"
+        v-if="!householdStore.isLoaded"
         class="p-5 text-sm text-muted"
       >
         Household members are unavailable.
       </div>
 
       <div
-        v-else-if="dashboardStore.isLoading"
+        v-else-if="householdStore.isLoading"
         class="space-y-3 p-5"
       >
         <USkeleton class="h-14 w-full" />
@@ -167,9 +162,6 @@ function formatJoinedDate(value?: string) {
               <p class="truncate text-sm font-medium text-highlighted">
                 {{ getMemberDisplayName(member) }}
               </p>
-              <p class="truncate text-sm text-muted">
-                {{ member.email }}
-              </p>
             </div>
           </div>
 
@@ -180,9 +172,6 @@ function formatJoinedDate(value?: string) {
               variant="subtle"
               label="You"
             />
-            <p class="hidden text-sm text-muted sm:block">
-              {{ formatJoinedDate(member.joinedAt) }}
-            </p>
           </div>
         </div>
       </div>
