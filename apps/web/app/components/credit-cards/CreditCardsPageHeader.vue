@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { NavigationMenuItem } from '@nuxt/ui'
+import CreditCardCreateModal from '~/components/credit-cards/CreditCardCreateModal.vue'
 
 defineOptions({
   name: 'CreditCardsPageHeader'
@@ -13,8 +14,10 @@ const authStore = useAuthStore()
 const householdStore = useHouseholdStore()
 
 const emit = defineEmits<{
-  createCreditCard: []
+  refresh: []
 }>()
+
+const creditCardCreateModal = ref<InstanceType<typeof CreditCardCreateModal> | null>(null)
 
 const isLoading = computed<boolean>(() => !householdStore.isLoaded || !authStore.isLoaded)
 const householdSelected = computed<boolean>(() => props.userId === null)
@@ -42,6 +45,14 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
     }))
   ]
 })
+
+function createCreditCard() {
+  creditCardCreateModal.value?.open(props.userId)
+}
+
+if (import.meta.client) {
+  void householdStore.fetchHousehold()
+}
 </script>
 
 <template>
@@ -70,8 +81,13 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
         v-if="!isLoading && canCreateCreditCard"
         icon="i-lucide-plus"
         label="New credit card"
-        @click="emit('createCreditCard')"
+        @click="createCreditCard"
       />
     </div>
+
+    <CreditCardCreateModal
+      ref="creditCardCreateModal"
+      @created="emit('refresh')"
+    />
   </div>
 </template>

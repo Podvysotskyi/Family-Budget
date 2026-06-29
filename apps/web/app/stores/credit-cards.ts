@@ -1,7 +1,6 @@
 import type { CancelCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 
 const { createAbortController } = useAbortController()
-const { addErrorToast } = useAppToast()
 const { get, patch, post } = useStoreApi()
 
 export const useCreditCardsStore = defineStore('creditCards', {
@@ -50,7 +49,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
         this.abortController = null
       } catch (error) {
         if (!abortController.signal.aborted) {
-          addErrorToast('Credit cards could not be loaded')
+          useAppToast().addErrorToast('Credit cards could not be loaded')
         }
       } finally {
         if (!abortController.signal.aborted) {
@@ -80,7 +79,7 @@ export const useCreditCardsStore = defineStore('creditCards', {
         this.abortController = null
       } catch (error) {
         if (!abortController.signal.aborted) {
-          addErrorToast('Credit cards could not be loaded')
+          useAppToast().addErrorToast('Credit cards could not be loaded')
         }
       } finally {
         if (!abortController.signal.aborted) {

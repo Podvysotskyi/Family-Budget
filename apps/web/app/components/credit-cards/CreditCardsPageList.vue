@@ -12,9 +12,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  cancel: [creditCard: CreditCard]
-  edit: [creditCard: CreditCard]
-  updateBalance: [creditCard: CreditCard]
+  refresh: []
 }>()
 
 const showOnlyActiveCreditCards = ref<boolean>(true)
@@ -54,9 +52,7 @@ const filteredCreditCards = computed<CreditCard[]>(() => {
         v-for="creditCard in filteredCreditCards"
         :key="creditCard.id"
         :credit-card="creditCard"
-        @update-balance="emit('updateBalance', creditCard)"
-        @edit="emit('edit', creditCard)"
-        @cancel="emit('cancel', creditCard)"
+        @refresh="emit('refresh')"
       />
     </div>
 
