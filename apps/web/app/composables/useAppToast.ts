@@ -1,8 +1,6 @@
 export function useAppToast() {
-  const toast = useToast()
-
   function addSuccessToast(title: string) {
-    toast.add({
+    useToast().add({
       title,
       color: 'success',
       icon: 'i-lucide-circle-check'
@@ -10,7 +8,7 @@ export function useAppToast() {
   }
 
   function addErrorToast(title: string) {
-    toast.add({
+    useToast().add({
       title,
       color: 'error',
       icon: 'i-lucide-circle-alert'

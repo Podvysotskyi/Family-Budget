@@ -22,8 +22,8 @@ const emit = defineEmits<{
   created: []
 }>()
 
-const isOpen = ref(false)
-const isSaving = ref(false)
+const isOpen = ref<boolean>(false)
+const isSaving = ref<boolean>(false)
 const context = ref<CreditCardCreateFormContext | null>(null)
 const formData = reactive<CreditCardFormData>({
   name: '',
@@ -51,7 +51,7 @@ const formSchema = computed(() => z.object({
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
   )
 }))
-const canSubmit = computed(() => Boolean(context.value?.householdId && !isSaving.value))
+const canSubmit = computed<boolean>(() => Boolean(context.value?.householdId && !isSaving.value))
 const isDisabled = computed(() => isSaving.value || !context.value?.householdId)
 
 watch(() => formData.startDate, (startDate) => {

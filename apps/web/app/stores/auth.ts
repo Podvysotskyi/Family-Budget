@@ -11,6 +11,11 @@ export const useAuthStore = defineStore('auth', {
     user: null as AuthUser | null
   }),
 
+  getters: {
+    userId: state => state.user?.id || '',
+    isLoaded: state => state.user !== null,
+  },
+
   actions: {
     async checkSession(options: { force?: boolean } = {}) {
       const sessionRequest = sessionRequests.get(this)

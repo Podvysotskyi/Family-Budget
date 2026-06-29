@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { NavigationMenuItem } from '@nuxt/ui'
 import type { CreditCard } from '~/types/credit-cards'
 import CreditCardCloseModal from '~/components/credit-cards/CreditCardCloseModal.vue'
 import CreditCardCreateModal from '~/components/credit-cards/CreditCardCreateModal.vue'
 import CreditCardEditModal from '~/components/credit-cards/CreditCardEditModal.vue'
 import CreditCardUpdateBalanceModal from '~/components/credit-cards/CreditCardUpdateBalanceModal.vue'
+import CreditCardsPageHeader from '~/components/credit-cards/CreditCardsPageHeader.vue'
 
 defineOptions({
   name: 'CreditCardsPageShell'
@@ -36,23 +36,8 @@ const creditCardCreateModal = ref<InstanceType<typeof CreditCardCreateModal> | n
 const creditCardEditModal = ref<InstanceType<typeof CreditCardEditModal> | null>(null)
 const creditCardUpdateBalanceModal = ref<InstanceType<typeof CreditCardUpdateBalanceModal> | null>(null)
 const hasMultipleMembers = computed(() => members.value.length > 1)
-const creditCardNavigationItems = computed<NavigationMenuItem[]>(() => {
-  return [
-    ...(hasMultipleMembers.value
-      ? [{
-          label: 'Household',
-          icon: assignmentFilter.value === householdAssignmentValue ? 'i-lucide-circle-dot' : 'i-lucide-circle',
-          to: buildCreditCardAssignmentPath(householdAssignmentValue),
-          active: assignmentFilter.value === householdAssignmentValue
-        }]
-      : []),
-    ...members.value.map(member => ({
-      label: member.name || member.email,
-      icon: member.userId === assignmentFilter.value ? 'i-lucide-circle-dot' : 'i-lucide-circle',
-      to: buildCreditCardAssignmentPath(member.userId),
-      active: member.userId === assignmentFilter.value
-    }))
-  ]
+const selectedCreditCardUserId = computed(() => {
+  return assignmentFilter.value === householdAssignmentValue ? null : assignmentFilter.value
 })
 const assignmentOptions = computed(() => {
   return [
@@ -69,9 +54,6 @@ const assignmentOptions = computed(() => {
         }]
       : [])
   ]
-})
-const canCreateCreditCard = computed(() => {
-  return assignmentFilter.value === householdAssignmentValue || assignmentFilter.value === dashboardStore.user?.id
 })
 const filteredCreditCards = computed(() => {
   return creditCards.value.filter(creditCard => !showOnlyActiveCreditCards.value || isActiveCreditCard(creditCard))
@@ -119,19 +101,23 @@ watch(() => dashboardStore.user?.id, () => {
 
 async function refresh() {
   if (assignmentFilter.value === householdAssignmentValue) {
-    await creditCardsStore.fetchHouseholdCreditCards(householdId.value)
+    await refreshHouseholdCreditCards()
 
     return
   }
 
-  await creditCardsStore.fetchUserCreditCards(assignmentFilter.value)
+  await refreshUserCreditCards(assignmentFilter.value)
+}
+
+async function refreshHouseholdCreditCards() {
+  await creditCardsStore.fetchHouseholdCreditCards(householdId.value)
+}
+
+async function refreshUserCreditCards(userId: string) {
+  await creditCardsStore.fetchUserCreditCards(userId)
 }
 
 function startCreatingCreditCard() {
-  if (!canCreateCreditCard.value) {
-    return
-  }
-
   creditCardCreateModal.value?.open(getCreditCardCreateFormContext())
 }
 
@@ -260,39 +246,14 @@ function formatDate(value: string | null) {
   })
 }
 
-function buildCreditCardAssignmentPath(assignment: string) {
-  if (assignment === dashboardStore.defaultBudgetUserId) {
-    return '/credit-cards'
-  }
-
-  return `/credit-cards/${encodeURIComponent(assignment)}`
-}
-
 </script>
 
 <template>
   <UContainer class="py-6">
-    <div class="mb-5 flex flex-col gap-3 border-b border-default pb-3 sm:flex-row sm:items-center sm:justify-between">
-      <div
-        v-if="creditCardNavigationItems.length"
-        class="min-w-0 overflow-x-auto"
-      >
-        <UNavigationMenu
-          :items="creditCardNavigationItems"
-          orientation="horizontal"
-          :ui="{ link: 'whitespace-nowrap' }"
-        />
-      </div>
-
-      <div class="flex shrink-0 flex-wrap items-center gap-2 self-start sm:self-auto">
-        <UButton
-          icon="i-lucide-plus"
-          label="New credit card"
-          :disabled="pending || !householdId || !canCreateCreditCard"
-          @click="startCreatingCreditCard"
-        />
-      </div>
-    </div>
+    <CreditCardsPageHeader
+      :user-id="selectedCreditCardUserId"
+      @create-credit-card="startCreatingCreditCard"
+    />
 
     <section class="rounded-lg border border-default bg-default">
       <div class="flex items-center justify-between gap-3 border-b border-default px-5 py-3">

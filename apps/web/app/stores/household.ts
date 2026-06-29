@@ -19,7 +19,7 @@ export const useHouseholdStore = defineStore('household', {
 
     householdName: state => state.household?.householdName || '',
 
-    isLoaded: state => Boolean(state.household),
+    isLoaded: state => state.household != null,
 
     isLoading: state => state.loading,
 

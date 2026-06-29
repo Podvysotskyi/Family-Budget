@@ -12,7 +12,9 @@ const dashboardStore = useDashboardStore()
 await dashboardStore.fetchDashboard()
 const householdSettingsPath = '/settings/household'
 const budgetCategoriesSettingsPath = '/settings/budget-categories'
-const creditCardsPath = '/credit-cards'
+const creditCardsPath = computed(() => {
+  return dashboardStore.user?.id ? `/credit-cards/${encodeURIComponent(dashboardStore.user.id)}` : '/credit-cards'
+})
 const goalsPath = '/goals'
 const incomeTypesSettingsPath = '/settings/income-types'
 const userBudgetPath = '/budget'
@@ -34,7 +36,7 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
     {
       label: 'Credit cards',
       icon: 'i-lucide-credit-card',
-      to: creditCardsPath,
+      to: creditCardsPath.value,
       active: route.path.startsWith('/credit-cards')
     },
     {
