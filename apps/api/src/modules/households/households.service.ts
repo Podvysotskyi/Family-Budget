@@ -640,6 +640,10 @@ export class HouseholdService {
       {
         date: startDate,
         limit: getCreditCardLimit(input)
+      },
+      {
+        date: startDate,
+        balance: getCreditCardInitialBalance(input)
       }
     )
 
@@ -1254,6 +1258,16 @@ function getCreditCardLimit(input: SaveCreditCardDto) {
   }
 
   return limit
+}
+
+function getCreditCardInitialBalance(input: SaveCreditCardDto) {
+  const balance = Number(input?.balance)
+
+  if (!Number.isFinite(balance) || balance < 0) {
+    throw new BadRequestException('Credit card balance must be zero or greater')
+  }
+
+  return balance
 }
 
 function getCreditCardBalanceDate(input: UpdateCreditCardBalanceDto, startDate: string) {

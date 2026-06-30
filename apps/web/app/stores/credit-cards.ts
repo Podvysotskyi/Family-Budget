@@ -1,4 +1,4 @@
-import type { CancelCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
+import type { CancelCreditCardInput, CreateCreditCardInput, CreditCard, SaveCreditCardInput, UpdateCreditCardBalanceInput } from '~/types/credit-cards'
 
 const { createAbortController } = useAbortController()
 const { addErrorToast } = useAppToast()
@@ -89,11 +89,11 @@ export const useCreditCardsStore = defineStore('creditCards', {
       }
     },
 
-    async createHouseholdCreditCard(householdId: string, input: SaveCreditCardInput) {
+    async createHouseholdCreditCard(householdId: string, input: CreateCreditCardInput) {
       await post(`/households/${householdId}/credit-cards`, input)
     },
 
-    async createUserCreditCard(userId: string, input: SaveCreditCardInput) {
+    async createUserCreditCard(userId: string, input: CreateCreditCardInput) {
       await post(`/users/${userId}/credit-cards`, input)
     },
 

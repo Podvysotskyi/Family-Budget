@@ -22,11 +22,16 @@ export type SaveCreditCardInput = {
   limit: number
 }
 
+export type CreateCreditCardInput = SaveCreditCardInput & {
+  balance: number
+}
+
 export type CreditCardCreateFormData = {
   name: string
   startDate: Date | null
   dueDate: Date | null
   limit: number | null
+  balance: number | null
 }
 
 export type CreditCardEditFormData = {
@@ -52,6 +57,7 @@ export type CreditCardCreateFormSubmitData = {
   startDate: Date
   dueDate: Date
   limit: number
+  balance: number
 }
 
 export type CreditCardCreateFormSubmitEvent = {

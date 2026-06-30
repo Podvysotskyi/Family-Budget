@@ -4,4 +4,5 @@ export interface SaveCreditCardDto {
   startDate?: unknown
   dueDate?: unknown
   limit?: unknown
+  balance?: unknown
 }

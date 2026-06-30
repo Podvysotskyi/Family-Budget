@@ -4,7 +4,7 @@ import type {
   CreditCardCreateFormData,
   CreditCardCreateFormSubmitData,
   CreditCardCreateFormSubmitEvent,
-  SaveCreditCardInput
+  CreateCreditCardInput
 } from '~/types/credit-cards'
 import AppDatePicker from '~/components/shared/AppDatePicker.vue'
 
@@ -29,7 +29,8 @@ const formData = reactive<CreditCardCreateFormData>({
   name: '',
   startDate: null,
   dueDate: null,
-  limit: null
+  limit: null,
+  balance: 0
 })
 
 const dueDateMin = computed<Date>(() => formData.startDate || getToday())
@@ -46,6 +47,10 @@ const formSchema = computed<z.ZodType<CreditCardCreateFormSubmitData>>(() => z.o
   limit: z.preprocess(
     value => value === null ? undefined : value,
     z.number('Limit is required.').min(0.01, 'Limit must be greater than zero.')
+  ),
+  balance: z.preprocess(
+    value => value === null ? 0 : value,
+    z.number('Balance is required.').min(0, 'Balance must be zero or greater.')
   )
 }))
 
@@ -87,12 +92,13 @@ async function save(event: CreditCardCreateFormSubmitEvent) {
   isSaving.value = true
 
   try {
-    const input: SaveCreditCardInput = {
+    const input: CreateCreditCardInput = {
       name: event.data.name.trim(),
       userId: selectedUserId.value,
       startDate: formatDateToString(event.data.startDate),
       dueDate: formatDateToString(event.data.dueDate),
-      limit: event.data.limit
+      limit: event.data.limit,
+      balance: event.data.balance
     }
 
     if (selectedUserId.value) {
@@ -116,6 +122,7 @@ function resetForm() {
   formData.startDate = getToday()
   formData.dueDate = getToday()
   formData.limit = null
+  formData.balance = 0
 }
 
 defineExpose({
@@ -194,6 +201,24 @@ defineExpose({
             icon="i-lucide-dollar-sign"
             type="number"
             min="0.01"
+            step="0.01"
+            placeholder="0.00"
+            :disabled="isSaving"
+          />
+        </UFormField>
+
+        <UFormField
+          label="Balance"
+          name="balance"
+          required
+        >
+          <UInput
+            id="credit-card-create-balance"
+            v-model.nullable="formData.balance"
+            class="w-full"
+            icon="i-lucide-dollar-sign"
+            type="number"
+            min="0"
             step="0.01"
             placeholder="0.00"
             :disabled="isSaving"

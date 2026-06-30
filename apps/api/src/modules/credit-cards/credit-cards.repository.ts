@@ -20,6 +20,12 @@ export interface SaveCreditCardLimitInput {
   limit: number
 }
 
+export interface SaveCreditCardBalanceInput {
+  creditCardId: string
+  date: string
+  balance: number
+}
+
 export interface UpdateCreditCardBalanceInput {
   creditCardId: string
   date: string
@@ -63,7 +69,11 @@ export class CreditCardsRepository {
       .getMany()
   }
 
-  async create(cardInput: SaveCreditCardInput, limitInput: Omit<SaveCreditCardLimitInput, 'creditCardId'>) {
+  async create(
+    cardInput: SaveCreditCardInput,
+    limitInput: Omit<SaveCreditCardLimitInput, 'creditCardId'>,
+    balanceInput: Omit<SaveCreditCardBalanceInput, 'creditCardId'>
+  ) {
     return this.creditCardsRepository.manager.transaction(async (manager) => {
       const creditCard = await manager.save(CreditCardEntity, manager.create(CreditCardEntity, cardInput))
 
@@ -83,8 +93,7 @@ export class CreditCardsRepository {
         .upsert(
           manager.create(CreditCardBalanceEntity, {
             creditCardId: creditCard.id,
-            date: limitInput.date,
-            balance: 0
+            ...balanceInput
           }),
           {
             conflictPaths: ['creditCardId', 'date']

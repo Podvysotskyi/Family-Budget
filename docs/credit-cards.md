@@ -87,7 +87,8 @@ When a credit card is created:
 2. `end_date` is set to null.
 3. `start_date` is taken from the submitted `startDate`.
 4. An initial `credit_card_limits` row is upserted using the submitted `startDate`.
-5. The created card is returned as a lean `CreditCard` response.
+5. An initial `credit_card_balances` row is upserted using the submitted `startDate` and `balance`.
+6. The created card is returned as a lean `CreditCard` response.
 
 The API validates:
 
@@ -95,6 +96,7 @@ The API validates:
 - the card name is present
 - dates use `YYYY-MM-DD`
 - the limit is greater than zero
+- the balance is zero or greater
 - user-assigned cards can only be assigned to the current user
 
 ## Updating Credit Cards
@@ -178,6 +180,7 @@ The create form asks for:
 - start date, defaulting to today
 - due date, with a minimum of start date
 - limit
+- balance
 
 The edit form asks for:
 
