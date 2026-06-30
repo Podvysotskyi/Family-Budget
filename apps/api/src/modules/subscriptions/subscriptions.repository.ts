@@ -16,6 +16,7 @@ export interface SaveSubscriptionInput {
   endDate: string | null
   amount: number
   autopay: boolean
+  nextChargeDate?: string | null
 }
 
 export interface UpdateSubscriptionInput extends SaveSubscriptionInput {
@@ -47,6 +48,14 @@ export class SubscriptionsRepository {
       .createQueryBuilder('subscription')
       .leftJoinAndSelect('subscription.user', 'user')
       .where('subscription.household_id = :householdId', { householdId })))
+      .getMany()
+  }
+
+  listByUserId(userId: string) {
+    return orderSubscriptions(joinSubscriptionDetails(this.subscriptionsRepository
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.user', 'user')
+      .where('subscription.user_id = :userId', { userId })))
       .getMany()
   }
 
@@ -102,6 +111,10 @@ export class SubscriptionsRepository {
 
       await this.upsertSubscriptionAmount(manager, subscription.id, input.startDate, input.amount)
       await this.ensureSubscriptionDates(manager, [subscription], ensureDatesThroughDate)
+
+      if (input.nextChargeDate) {
+        await this.replaceSubscriptionDateInPeriod(manager, subscription.id, subscription.type, input.nextChargeDate)
+      }
 
       return manager.findOne(SubscriptionEntity, {
         where: {
@@ -184,6 +197,19 @@ export class SubscriptionsRepository {
     })
   }
 
+  findById(subscriptionId: string) {
+    return this.subscriptionsRepository.findOne({
+      where: {
+        id: subscriptionId
+      },
+      relations: {
+        amounts: true,
+        dates: true,
+        user: true
+      }
+    })
+  }
+
   async deleteTransactionsAfterDate(subscriptionId: string, date: string) {
     const result = await this.subscriptionTransactionsRepository.delete({
       subscriptionId,
@@ -202,9 +228,7 @@ export class SubscriptionsRepository {
     return result.affected || 0
   }
 
-  async ensureActiveMonthSubscriptionDates(referenceDate: string) {
-    const monthEndDate = getMonthEndDate(referenceDate)
-
+  async ensureNextSubscriptionDates(referenceDate: string) {
     return this.subscriptionsRepository.manager.transaction(async (manager) => {
       const subscriptions = await manager.find(SubscriptionEntity, {
         where: {},
@@ -212,14 +236,13 @@ export class SubscriptionsRepository {
           dates: true
         }
       })
-      const monthStartDate = getMonthStartDate(referenceDate)
       const activeSubscriptions = subscriptions.filter((subscription) => {
-        return subscription.startDate <= monthEndDate
-          && (!subscription.endDate || subscription.endDate >= monthStartDate)
+        return subscription.startDate <= referenceDate
+          && (!subscription.endDate || subscription.endDate >= referenceDate)
       })
 
       await this.normalizeSubscriptionDates(manager, activeSubscriptions)
-      return this.ensureSubscriptionDates(manager, activeSubscriptions, monthEndDate)
+      return this.ensureNextSubscriptionDatesForReferenceDate(manager, activeSubscriptions, referenceDate)
     })
   }
 
@@ -396,6 +419,29 @@ export class SubscriptionsRepository {
 
     return result.identifiers.length
   }
+
+  private async ensureNextSubscriptionDatesForReferenceDate(manager: EntityManager, subscriptions: SubscriptionEntity[], referenceDate: string) {
+    const values = subscriptions.flatMap((subscription) => {
+      return buildNextSubscriptionDates(subscription, referenceDate).map(date => ({
+        date,
+        subscriptionId: subscription.id
+      }))
+    })
+
+    if (!values.length) {
+      return 0
+    }
+
+    const result = await manager
+      .createQueryBuilder()
+      .insert()
+      .into(SubscriptionDueDateEntity)
+      .values(values)
+      .orIgnore()
+      .execute()
+
+    return result.identifiers.length
+  }
 }
 
 function joinSubscriptionDetails(query: SelectQueryBuilder<SubscriptionEntity>) {
@@ -429,6 +475,34 @@ function buildMissingSubscriptionDates(subscription: SubscriptionEntity, through
     }
 
     candidateDate = getNextSubscriptionDate(subscription.type, candidateDate)
+  }
+
+  return dates
+}
+
+function buildNextSubscriptionDates(subscription: SubscriptionEntity, referenceDate: string) {
+  const dates: string[] = []
+  const existingDates = getNormalizedSubscriptionDates(subscription)
+  let latestDate = existingDates[existingDates.length - 1] || null
+
+  if (!latestDate) {
+    if (subscription.startDate > referenceDate) {
+      return dates
+    }
+
+    dates.push(subscription.startDate)
+    latestDate = subscription.startDate
+  }
+
+  while (latestDate <= referenceDate) {
+    const nextDate = getNextSubscriptionDate(subscription.type, latestDate)
+
+    if (subscription.endDate && nextDate > subscription.endDate) {
+      break
+    }
+
+    dates.push(nextDate)
+    latestDate = nextDate
   }
 
   return dates

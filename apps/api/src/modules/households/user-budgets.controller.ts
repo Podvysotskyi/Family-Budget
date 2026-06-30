@@ -5,7 +5,9 @@ import type { CancelCreditCardDto } from '../credit-cards/dto/cancel-credit-card
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { UpdateCreditCardBalanceDto } from '../credit-cards/dto/update-credit-card-balance.dto'
 import type { SaveIncomeDto } from '../income/dto/save-income.dto'
+import type { CancelSubscriptionDto } from '../subscriptions/dto/cancel-subscription.dto'
 import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
+import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import { HouseholdService } from './households.service'
 
 @Controller()
@@ -176,6 +178,65 @@ export class UserBudgetsController {
     }
 
     return this.householdService.listUserCreditCards(user.id, budgetUserId)
+  }
+
+  @Get('users/:id/subscriptions')
+  userPageSubscriptions(
+    @Param('id') budgetUserId: string,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.listUserSubscriptions(user.id, budgetUserId)
+  }
+
+  @Post('users/:id/subscriptions')
+  createUserSubscription(
+    @Param('id') budgetUserId: string,
+    @Body() input: SaveSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.createUserSubscription(user.id, budgetUserId, input)
+  }
+
+  @Patch('subscriptions/:id')
+  updateSubscription(
+    @Param('id') subscriptionId: string,
+    @Body() input: SaveSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!subscriptionId) {
+      throw new BadRequestException('Subscription id is required')
+    }
+
+    return this.householdService.updateSubscriptionForCurrentUser(user.id, subscriptionId, input)
+  }
+
+  @Patch('subscriptions/:id/cancel')
+  cancelSubscription(
+    @Param('id') subscriptionId: string,
+    @Body() input: CancelSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!subscriptionId) {
+      throw new BadRequestException('Subscription id is required')
+    }
+
+    return this.householdService.cancelSubscriptionForCurrentUser(user.id, subscriptionId, input)
   }
 
   @Post('users/:id/credit-cards')

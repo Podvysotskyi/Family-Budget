@@ -2,9 +2,7 @@ export type SubscriptionType = 'monthly' | 'yearly'
 
 export type Subscription = {
   id: string
-  householdId: string
   name: string
-  userId: string | null
   user: {
     userId: string
     name: string
@@ -17,8 +15,6 @@ export type Subscription = {
   nextChargeDate: string | null
   amount: number
   autopay: boolean
-  createdAt: string
-  updatedAt: string
 }
 
 export type SaveSubscriptionInput = {
@@ -30,4 +26,66 @@ export type SaveSubscriptionInput = {
   nextChargeDate?: string | null
   amount: number
   autopay: boolean
+}
+
+export type CancelSubscriptionInput = {
+  effectiveDate: string
+}
+
+export type SubscriptionCreateFormData = {
+  name: string
+  type: SubscriptionType
+  startDate: Date | null
+  dueDate: Date | null
+  endDate: Date | null
+  amount: number | null
+  autopay: boolean
+}
+
+export type SubscriptionCreateFormSubmitData = {
+  name: string
+  type: SubscriptionType
+  startDate: Date
+  dueDate: Date
+  endDate: Date | null
+  amount: number
+  autopay: boolean
+}
+
+export type SubscriptionCreateFormSubmitEvent = {
+  data: SubscriptionCreateFormSubmitData
+}
+
+export type SubscriptionEditFormData = {
+  name: string
+  userId: string
+  type: SubscriptionType
+  nextChargeDate: Date | null
+  amount: number | null
+  autopay: boolean
+}
+
+export type SubscriptionEditFormSubmitData = {
+  name: string
+  userId: string
+  type: SubscriptionType
+  nextChargeDate: Date
+  amount: number
+  autopay: boolean
+}
+
+export type SubscriptionEditFormSubmitEvent = {
+  data: SubscriptionEditFormSubmitData
+}
+
+export type SubscriptionCancellationFormData = {
+  effectiveDate: Date | null
+}
+
+export type SubscriptionCancellationSubmitData = {
+  effectiveDate: Date
+}
+
+export type SubscriptionCancellationSubmitEvent = {
+  data: SubscriptionCancellationSubmitData
 }

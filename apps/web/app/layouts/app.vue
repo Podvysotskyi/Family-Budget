@@ -18,7 +18,9 @@ const creditCardsPath = computed(() => {
 const goalsPath = '/goals'
 const incomeTypesSettingsPath = '/settings/income-types'
 const userBudgetPath = '/budget'
-const subscriptionsPath = '/subscriptions'
+const subscriptionsPath = computed(() => {
+  return dashboardStore.user?.id ? `/subscriptions/${encodeURIComponent(dashboardStore.user.id)}` : '/subscriptions'
+})
 const navigationItems = computed<NavigationMenuItem[]>(() => {
   return [
     {
@@ -30,7 +32,7 @@ const navigationItems = computed<NavigationMenuItem[]>(() => {
     {
       label: 'Subscriptions',
       icon: 'i-lucide-repeat-2',
-      to: subscriptionsPath,
+      to: subscriptionsPath.value,
       active: route.path.startsWith('/subscriptions')
     },
     {

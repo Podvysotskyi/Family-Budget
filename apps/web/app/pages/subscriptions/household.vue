@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import SubscriptionsPageShell from '~/components/subscriptions/SubscriptionsPageShell.vue'
-
 defineOptions({
-  name: 'HouseholdSubscriptionsPage'
+  name: 'HouseholdSubscriptionsRedirectPage'
 })
 
 definePageMeta({
@@ -10,14 +8,9 @@ definePageMeta({
   layout: 'app'
 })
 
-const dashboardStore = useDashboardStore()
-await dashboardStore.fetchDashboard()
-
-if (dashboardStore.members.length <= 1) {
-  await navigateTo('/subscriptions')
-}
+await navigateTo('/subscriptions')
 </script>
 
 <template>
-  <SubscriptionsPageShell subscription-user-id="household" />
+  <div />
 </template>

@@ -22,6 +22,7 @@ import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto
 import type { IncomeTypeEntity } from '../income-types/entities/income-type.entity'
 import { IncomeTypesRepository } from '../income-types/income-types.repository'
 import type { CreateSubscriptionTransactionDto } from '../subscriptions/dto/create-subscription-transaction.dto'
+import type { CancelSubscriptionDto } from '../subscriptions/dto/cancel-subscription.dto'
 import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { SubscriptionEntity } from '../subscriptions/entities/subscription.entity'
 import { SubscriptionType } from '../subscriptions/entities/subscription-type'
@@ -484,29 +485,75 @@ export class HouseholdService {
   async listSubscriptions(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const subscriptions = await this.subscriptionsRepository.listByHouseholdId(householdId)
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
 
     return {
-      subscriptions: subscriptions.map(toSubscription)
+      subscriptions: subscriptions
+        .filter(subscription => !subscription.userId)
+        .map(subscription => toSubscription(subscription, onlyMember))
     }
   }
 
   async createSubscription(householdId: string, userId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
-    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
 
-    if (subscriptionUserId && subscriptionUserId !== userId) {
-      throw new ForbiddenException('Subscription can only be created for current user or household')
+    return this.createSubscriptionForOwner(householdId, null, input)
+  }
+
+  async listUserSubscriptions(currentUserId: string, subscriptionUserId: string) {
+    const household = await this.usersRepository.findHouseholdByUserId(subscriptionUserId)
+
+    if (!household) {
+      throw new NotFoundException('Subscription user not found')
     }
+
+    await this.requireHouseholdUser(household.householdId, currentUserId)
+
+    if (subscriptionUserId !== currentUserId) {
+      throw new ForbiddenException('Subscriptions can only be viewed for current user or household')
+    }
+
+    const subscriptions = await this.subscriptionsRepository.listByUserId(subscriptionUserId)
+
+    return {
+      subscriptions: subscriptions.map(subscription => toSubscription(subscription))
+    }
+  }
+
+  async createUserSubscription(currentUserId: string, subscriptionUserId: string, input: SaveSubscriptionDto) {
+    const household = await this.usersRepository.findHouseholdByUserId(subscriptionUserId)
+
+    if (!household) {
+      throw new NotFoundException('Subscription user not found')
+    }
+
+    await this.requireHouseholdUser(household.householdId, currentUserId)
+
+    if (subscriptionUserId !== currentUserId) {
+      throw new ForbiddenException('Subscriptions can only be created for current user or household')
+    }
+
+    return this.createSubscriptionForOwner(household.householdId, subscriptionUserId, input)
+  }
+
+  private async createSubscriptionForOwner(householdId: string, subscriptionUserId: string | null, input: SaveSubscriptionDto) {
+    const startDate = getSubscriptionStartDate(input)
+    const endDate = getSubscriptionEndDate(input)
+    const nextChargeDate = getSubscriptionNextChargeDate(input) || startDate
+
+    validateSubscriptionNextChargeDate(nextChargeDate, startDate, endDate)
 
     const subscription = await this.subscriptionsRepository.create({
       householdId,
       name: getSubscriptionName(input),
       userId: subscriptionUserId,
       type: getSubscriptionType(input),
-      startDate: getSubscriptionStartDate(input),
-      endDate: getSubscriptionEndDate(input),
+      startDate,
+      endDate,
       amount: getSubscriptionAmount(input),
-      autopay: getSubscriptionAutopay(input)
+      autopay: getSubscriptionAutopay(input),
+      nextChargeDate
     }, getCurrentMonthEndDate())
 
     if (!subscription) {
@@ -520,11 +567,20 @@ export class HouseholdService {
 
   async updateSubscription(householdId: string, userId: string, subscriptionId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
-    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
     const currentSubscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, householdId)
 
-    if (!currentSubscription) {
+    if (!currentSubscription || (currentSubscription.userId && currentSubscription.userId !== userId)) {
       throw new NotFoundException('Subscription not found')
+    }
+
+    if (currentSubscription.endDate) {
+      throw new BadRequestException('Canceled subscriptions cannot be edited')
+    }
+
+    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
+
+    if (subscriptionUserId && subscriptionUserId !== userId) {
+      throw new ForbiddenException('Subscriptions can only be assigned to current user or household')
     }
 
     const saveInput = {
@@ -568,6 +624,64 @@ export class HouseholdService {
     return {
       subscription: toSubscription(subscription)
     }
+  }
+
+  async updateSubscriptionForCurrentUser(userId: string, subscriptionId: string, input: SaveSubscriptionDto) {
+    const subscription = await this.subscriptionsRepository.findById(subscriptionId)
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    return this.updateSubscription(subscription.householdId, userId, subscriptionId, input)
+  }
+
+  async cancelSubscription(householdId: string, userId: string, subscriptionId: string, input: CancelSubscriptionDto) {
+    await this.requireHouseholdUser(householdId, userId)
+    const subscription = await this.subscriptionsRepository.findByIdAndHouseholdId(subscriptionId, householdId)
+
+    if (!subscription || (subscription.userId && subscription.userId !== userId)) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    if (subscription.endDate) {
+      throw new BadRequestException('Subscription is already canceled')
+    }
+
+    const effectiveDate = getSubscriptionCancellationDate(input, subscription.startDate)
+    const savedSubscription = await this.subscriptionsRepository.update(householdId, subscriptionId, {
+      name: subscription.name,
+      userId: subscription.userId,
+      type: subscription.type,
+      startDate: subscription.startDate,
+      endDate: effectiveDate,
+      amount: getSubscriptionAmountForDate(subscription, getCurrentDateKey()),
+      autopay: subscription.autopay,
+      amountEffectiveDate: getCurrentDateKey(),
+      ensureDatesThroughDate: getCurrentMonthEndDate(),
+      nextChargeDate: null
+    })
+
+    if (!savedSubscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    await this.subscriptionsRepository.deleteTransactionsAfterDate(savedSubscription.id, effectiveDate)
+    await this.subscriptionsRepository.deleteSubscriptionDatesAfterDate(savedSubscription.id, effectiveDate)
+
+    return {
+      subscription: toSubscription(savedSubscription)
+    }
+  }
+
+  async cancelSubscriptionForCurrentUser(userId: string, subscriptionId: string, input: CancelSubscriptionDto) {
+    const subscription = await this.subscriptionsRepository.findById(subscriptionId)
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found')
+    }
+
+    return this.cancelSubscription(subscription.householdId, userId, subscriptionId, input)
   }
 
   async listCreditCards(householdId: string, userId: string) {
@@ -1182,6 +1296,20 @@ function getSubscriptionNextChargeDate(input: SaveSubscriptionDto) {
   return nextChargeDate
 }
 
+function getSubscriptionCancellationDate(input: CancelSubscriptionDto, startDate: string) {
+  const effectiveDate = typeof input?.effectiveDate === 'string' ? input.effectiveDate : ''
+
+  if (!isDateString(effectiveDate)) {
+    throw new BadRequestException('Subscription cancellation effective date must be in YYYY-MM-DD format')
+  }
+
+  if (effectiveDate < startDate) {
+    throw new BadRequestException('Subscription cancellation effective date must be on or after the start date')
+  }
+
+  return effectiveDate
+}
+
 function validateSubscriptionNextChargeDate(nextChargeDate: string, startDate: string, endDate: string | null) {
   if (nextChargeDate < startDate) {
     throw new BadRequestException('Next charge date must be on or after the start date')
@@ -1403,28 +1531,33 @@ function isDateString(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value)
 }
 
-function toSubscription(subscription: SubscriptionEntity) {
+function toSubscription(subscription: SubscriptionEntity, assignedUser: HouseholdMember | null = null) {
+  const user = subscription.user
+    ? {
+        userId: subscription.user.id,
+        name: subscription.user.name,
+        email: subscription.user.email,
+        avatarUrl: subscription.user.avatarUrl
+      }
+    : assignedUser
+      ? {
+          userId: assignedUser.userId,
+          name: assignedUser.name,
+          email: '',
+          avatarUrl: assignedUser.avatarUrl
+        }
+      : null
+
   return {
     id: subscription.id,
-    householdId: subscription.householdId,
     name: subscription.name,
-    userId: subscription.userId,
-    user: subscription.user
-      ? {
-          userId: subscription.user.id,
-          name: subscription.user.name,
-          email: subscription.user.email,
-          avatarUrl: subscription.user.avatarUrl
-        }
-      : null,
+    user,
     type: subscription.type,
     startDate: subscription.startDate,
     endDate: subscription.endDate,
     nextChargeDate: getNextSubscriptionChargeDate(subscription, getCurrentDateKey()),
     amount: getSubscriptionAmountForDate(subscription, getCurrentDateKey()),
-    autopay: subscription.autopay,
-    createdAt: subscription.createdAt,
-    updatedAt: subscription.updatedAt
+    autopay: subscription.autopay
   }
 }
 

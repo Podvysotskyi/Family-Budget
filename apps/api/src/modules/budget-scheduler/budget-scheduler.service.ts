@@ -61,9 +61,9 @@ export class BudgetSchedulerService implements OnApplicationBootstrap {
 
   async ensureCurrentSubscriptionDates() {
     const referenceDate = this.getCurrentDateKey()
-    const createdCount = await this.subscriptionsRepository.ensureActiveMonthSubscriptionDates(referenceDate)
+    const createdCount = await this.subscriptionsRepository.ensureNextSubscriptionDates(referenceDate)
 
-    this.logger.log(`Subscription date scheduling created ${createdCount} dates for active month containing ${referenceDate}`)
+    this.logger.log(`Subscription date scheduling created ${createdCount} next dates for subscriptions due on or before ${referenceDate}`)
   }
 
   async processSubscriptionAutopay() {

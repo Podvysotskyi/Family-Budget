@@ -8,6 +8,7 @@ import type { UpdateCreditCardBalanceDto } from '../credit-cards/dto/update-cred
 import type { SaveCreditCardDto } from '../credit-cards/dto/save-credit-card.dto'
 import type { SaveGoalDto } from '../goals/dto/save-goal.dto'
 import type { SaveIncomeTypeDto } from '../income-types/dto/save-income-type.dto'
+import type { CancelSubscriptionDto } from '../subscriptions/dto/cancel-subscription.dto'
 import type { SaveSubscriptionDto } from '../subscriptions/dto/save-subscription.dto'
 import type { UpdateHouseholdDto } from './dto/update-household.dto'
 import { HouseholdService } from './households.service'
@@ -236,6 +237,26 @@ export class HouseholdsController {
     }
 
     return this.householdService.updateSubscription(householdId, user.id, subscriptionId, input)
+  }
+
+  @Patch(':id/subscriptions/:subscriptionId/cancel')
+  cancelSubscription(
+    @Param('id') householdId: string,
+    @Param('subscriptionId') subscriptionId: string,
+    @Body() input: CancelSubscriptionDto,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!householdId) {
+      throw new BadRequestException('Household id is required')
+    }
+
+    if (!subscriptionId) {
+      throw new BadRequestException('Subscription id is required')
+    }
+
+    return this.householdService.cancelSubscription(householdId, user.id, subscriptionId, input)
   }
 
   @Get(':id/credit-cards')

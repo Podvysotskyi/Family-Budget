@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import SubscriptionsPageShell from '~/components/subscriptions/SubscriptionsPageShell.vue'
+import SubscriptionsPageHeader from '~/components/subscriptions/SubscriptionsPageHeader.vue'
+import SubscriptionsPageList from '~/components/subscriptions/SubscriptionsPageList.vue'
 
 defineOptions({
   name: 'UserSubscriptionsPage'
@@ -11,9 +12,38 @@ definePageMeta({
 })
 
 const route = useRoute()
-const subscriptionUserId = computed(() => String(route.params.id))
+const authStore = useAuthStore()
+const householdStore = useHouseholdStore()
+const subscriptionsStore = useSubscriptionsStore()
+
+const routeUserId = computed<string>(() => String(route.params.id || '').trim())
+
+const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || subscriptionsStore.isLoading)
+
+async function refresh() {
+  await subscriptionsStore.fetchUserSubscriptions(routeUserId.value)
+}
+
+watch(routeUserId, async () => {
+  await refresh()
+}, { immediate: true })
+
+await Promise.all([
+  householdStore.fetchHousehold()
+])
 </script>
 
 <template>
-  <SubscriptionsPageShell :subscription-user-id="subscriptionUserId" />
+  <UContainer class="py-6">
+    <SubscriptionsPageHeader
+      :user-id="routeUserId"
+      @refresh="refresh"
+    />
+
+    <SubscriptionsPageList
+      :subscriptions="subscriptionsStore.userSubscriptionList(routeUserId)"
+      :is-loading="isLoading"
+      @refresh="refresh"
+    />
+  </UContainer>
 </template>
