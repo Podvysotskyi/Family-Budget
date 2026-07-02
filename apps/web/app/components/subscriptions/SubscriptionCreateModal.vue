@@ -220,20 +220,6 @@ defineExpose({
           />
         </UFormField>
 
-        <UFormField
-          label="Type"
-          name="type"
-          required
-        >
-          <USelect
-            id="subscription-create-type"
-            v-model="formData.type"
-            class="w-full"
-            :items="typeOptions"
-            :disabled="isSaving"
-          />
-        </UFormField>
-
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField
             label="Start date"
@@ -244,21 +230,6 @@ defineExpose({
               id="subscription-create-start-date"
               v-model="formData.startDate"
               empty-label="Select start date"
-              :disabled="isSaving"
-            />
-          </UFormField>
-
-          <UFormField
-            label="Due date"
-            name="dueDate"
-            required
-          >
-            <AppDatePicker
-              id="subscription-create-due-date"
-              v-model="formData.dueDate"
-              empty-label="Select due date"
-              :min="dueDateMin"
-              :max="dueDateMax"
               :disabled="isSaving"
             />
           </UFormField>
@@ -278,6 +249,35 @@ defineExpose({
             />
           </UFormField>
         </div>
+
+        <UFormField
+          label="Type"
+          name="type"
+          required
+        >
+          <USelect
+            id="subscription-create-type"
+            v-model="formData.type"
+            class="w-full"
+            :items="typeOptions"
+            :disabled="isSaving"
+          />
+        </UFormField>
+
+        <UFormField
+          label="Due date"
+          name="dueDate"
+          required
+        >
+          <AppDatePicker
+            id="subscription-create-due-date"
+            v-model="formData.dueDate"
+            empty-label="Select due date"
+            :min="dueDateMin"
+            :max="dueDateMax"
+            :disabled="isSaving"
+          />
+        </UFormField>
 
         <div class="rounded-lg border border-default px-3 py-2">
           <USwitch

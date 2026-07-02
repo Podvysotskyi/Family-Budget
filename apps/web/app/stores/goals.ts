@@ -1,66 +1,68 @@
 import type { Goal, SaveGoalInput } from '~/types/goals'
 
+const { createAbortController } = useAbortController()
+const { addErrorToast } = useAppToast()
 const { delete: deleteRequest, get, patch, post } = useStoreApi()
 
 export const useGoalsStore = defineStore('goals', {
   state: () => ({
-    errorsByHouseholdId: {} as Record<string, string | null>,
-    goalsByHouseholdId: {} as Record<string, Goal[]>,
-    loadingByHouseholdId: {} as Record<string, boolean>
+    abortController: null as AbortController | null,
+    householdGoals: [] as Goal[],
+    loading: false
   }),
 
+  getters: {
+    householdGoalList: state => state.householdGoals,
+
+    hasHouseholdGoals: state => state.householdGoals.length > 0,
+
+    isLoading: state => state.loading
+  },
+
   actions: {
-    getGoals(householdId: string) {
-      return this.goalsByHouseholdId[householdId] || []
-    },
-
-    getError(householdId: string) {
-      return this.errorsByHouseholdId[householdId] || null
-    },
-
-    isLoading(householdId: string) {
-      return this.loadingByHouseholdId[householdId] || false
-    },
-
-    async fetchGoals(householdId: string) {
+    async fetchHouseholdGoals(householdId: string) {
       if (!householdId) {
         return
       }
 
-      this.loadingByHouseholdId[householdId] = true
-      this.errorsByHouseholdId[householdId] = null
+      const abortController = createAbortController(this)
+      this.loading = true
+      this.householdGoals = []
 
       try {
         const response = await get<{
           goals: Goal[]
-        }>(`/households/${householdId}/goals`)
+        }>(`/households/${householdId}/goals`, {
+          signal: abortController.signal
+        })
 
-        this.goalsByHouseholdId[householdId] = response.goals
+        this.householdGoals = response.goals
+        this.abortController = null
       } catch {
-        this.errorsByHouseholdId[householdId] = 'Goals could not be loaded'
+        if (!abortController.signal.aborted) {
+          addErrorToast('Goals could not be loaded')
+        }
       } finally {
-        this.loadingByHouseholdId[householdId] = false
+        if (!abortController.signal.aborted) {
+          this.loading = false
+        }
       }
     },
 
     async createGoal(householdId: string, input: SaveGoalInput) {
       await post(`/households/${householdId}/goals`, input)
-      await this.fetchGoals(householdId)
     },
 
     async updateGoal(householdId: string, goalId: string, input: SaveGoalInput) {
       await patch(`/households/${householdId}/goals/${goalId}`, input)
-      await this.fetchGoals(householdId)
     },
 
-    async deleteGoal(householdId: string, goalId: string) {
+    async closeGoal(householdId: string, goalId: string) {
       await deleteRequest(`/households/${householdId}/goals/${goalId}`)
-      await this.fetchGoals(householdId)
     },
 
     async permanentlyDeleteGoal(householdId: string, goalId: string) {
       await deleteRequest(`/households/${householdId}/goals/${goalId}/permanent`)
-      await this.fetchGoals(householdId)
     }
   }
 })

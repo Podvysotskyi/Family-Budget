@@ -22,6 +22,8 @@ The goal row does not store the target amount. Targets are versioned in `goal_ta
 
 `user_id` is nullable. A null `user_id` means the goal is assigned to the household. A non-null `user_id` means the goal is assigned to that household member.
 
+Household assignment is only valid when the household has more than one member. In a one-member household, goals are assigned to that user. Users cannot assign goals to another household member.
+
 `include_in_budget` controls whether the goal should be considered part of budget planning.
 
 ### `goal_targets`
@@ -76,7 +78,9 @@ The API validates:
 - `end_date`, when present, is on or after `start_date`
 - the target amount is greater than zero
 - the target type is `monthly`, `weekly`, or `total`
-- user-assigned goals can only be assigned to the current user
+- one-member households assign goals to that user
+- multi-member households allow assignment to the household or the current user
+- users cannot assign goals to another household member
 
 ## Updating Goals
 
@@ -146,9 +150,15 @@ The `/goals` page supports:
 - permanently deleting a goal when it has no transactions
 - showing active goals only
 
+The assignment control follows the household ownership rules. One-member households only show the current user assignment. Multi-member households show household and current-user assignment options.
+
 The close confirmation tells the user that the action sets the goal end date and keeps transactions intact.
 
 The permanent delete action is shown only when `canDeletePermanently` is true.
+
+The Nuxt page owns household loading and list refresh. The page header owns the create modal, list items own row edit/close/delete modals, and successful modal actions emit a refresh event back to the page.
+
+The goals Pinia store keeps the active household goal list, exposes read-only getters, and does not implicitly reload the list after create, update, close, or permanent delete actions.
 
 ## Timezone
 

@@ -1,41 +1,74 @@
 <script setup lang="ts">
+import type { Goal } from '~/types/goals'
 import ConfirmationModal from '~/components/shared/ConfirmationModal.vue'
 
 defineOptions({
   name: 'GoalCloseModal'
 })
 
-defineProps<{
-  open: boolean
-  goalName: string
-  isClosing: boolean
-  error: string | null
-}>()
+const goalsStore = useGoalsStore()
+const householdStore = useHouseholdStore()
+const { addErrorToast, addSuccessToast } = useAppToast()
 
 const emit = defineEmits<{
-  'update:open': [value: boolean]
-  'confirm': []
+  closed: []
+  saved: []
 }>()
+
+const isOpen = ref<boolean>(false)
+const selectedGoal = ref<Goal | null>(null)
+const isSaving = ref<boolean>(false)
+
+function open(goal: Goal) {
+  selectedGoal.value = goal
+  isOpen.value = true
+}
+
+function close(force = false) {
+  if (isSaving.value && !force) {
+    return
+  }
+
+  isOpen.value = false
+  selectedGoal.value = null
+  emit('closed')
+}
+
+async function save() {
+  if (!selectedGoal.value || !householdStore.householdId) {
+    return
+  }
+
+  isSaving.value = true
+
+  try {
+    await goalsStore.closeGoal(householdStore.householdId, selectedGoal.value.id)
+    addSuccessToast('Goal closed.')
+    emit('saved')
+    close(true)
+  } catch {
+    addErrorToast('Goal could not be closed.')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+defineExpose({
+  close,
+  open
+})
 </script>
 
 <template>
   <ConfirmationModal
-    :open="open"
+    :open="isOpen"
     title="Close goal"
-    :description="goalName ? `Close ${goalName}?` : ''"
+    :description="selectedGoal ? `Close ${selectedGoal.name}?` : ''"
     confirm-label="Close"
-    :is-confirming="isClosing"
-    @update:open="emit('update:open', $event)"
-    @confirm="emit('confirm')"
+    :is-confirming="isSaving"
+    @update:open="(value: boolean) => !value && close()"
+    @confirm="save"
   >
-    <div class="space-y-2">
-      <p>This sets the goal end date to today and keeps transactions intact.</p>
-      <p
-        v-if="error"
-        class="text-sm text-error"
-      >
-        {{ error }}
-      </p>
-    </div>
+    <p>This sets the goal end date to today and keeps transactions intact.</p>
   </ConfirmationModal>
 </template>

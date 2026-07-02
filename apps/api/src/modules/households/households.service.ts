@@ -497,8 +497,13 @@ export class HouseholdService {
 
   async createSubscription(householdId: string, userId: string, input: SaveSubscriptionDto) {
     await this.requireHouseholdUser(householdId, userId)
+    const subscriptionUserId = await this.getSubscriptionUserId(householdId, input)
 
-    return this.createSubscriptionForOwner(householdId, null, input)
+    if (subscriptionUserId && subscriptionUserId !== userId) {
+      throw new ForbiddenException('Subscriptions can only be assigned to current user or household')
+    }
+
+    return this.createSubscriptionForOwner(householdId, subscriptionUserId, input)
   }
 
   async listUserSubscriptions(currentUserId: string, subscriptionUserId: string) {
@@ -514,10 +519,15 @@ export class HouseholdService {
       throw new ForbiddenException('Subscriptions can only be viewed for current user or household')
     }
 
-    const subscriptions = await this.subscriptionsRepository.listByUserId(subscriptionUserId)
+    const members = await this.usersRepository.listByHouseholdId(household.householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
+    const subscriptions = onlyMember
+      ? (await this.subscriptionsRepository.listByHouseholdId(household.householdId))
+          .filter(subscription => !subscription.userId || subscription.userId === subscriptionUserId)
+      : await this.subscriptionsRepository.listByUserId(subscriptionUserId)
 
     return {
-      subscriptions: subscriptions.map(subscription => toSubscription(subscription))
+      subscriptions: subscriptions.map(subscription => toSubscription(subscription, onlyMember))
     }
   }
 
@@ -710,17 +720,27 @@ export class HouseholdService {
       throw new ForbiddenException('Credit cards can only be viewed for current user or household')
     }
 
-    const creditCards = await this.creditCardsRepository.listByUserId(creditCardUserId)
+    const members = await this.usersRepository.listByHouseholdId(household.householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
+    const creditCards = onlyMember
+      ? (await this.creditCardsRepository.listByHouseholdId(household.householdId))
+          .filter(creditCard => !creditCard.userId || creditCard.userId === creditCardUserId)
+      : await this.creditCardsRepository.listByUserId(creditCardUserId)
 
     return {
-      creditCards: creditCards.map(creditCard => toCreditCard(creditCard))
+      creditCards: creditCards.map(creditCard => toCreditCard(creditCard, onlyMember))
     }
   }
 
   async createHouseholdCreditCard(householdId: string, userId: string, input: SaveCreditCardDto) {
     await this.requireHouseholdUser(householdId, userId)
+    const creditCardUserId = await this.getCreditCardUserId(householdId, input)
 
-    return this.createCreditCard(householdId, null, input)
+    if (creditCardUserId && creditCardUserId !== userId) {
+      throw new ForbiddenException('Credit cards can only be assigned to current user or household')
+    }
+
+    return this.createCreditCard(householdId, creditCardUserId, input)
   }
 
   async createUserCreditCard(currentUserId: string, creditCardUserId: string, input: SaveCreditCardDto) {
@@ -895,11 +915,13 @@ export class HouseholdService {
   async listGoals(householdId: string, userId: string) {
     await this.requireHouseholdUser(householdId, userId)
     const goals = await this.goalsRepository.listByHouseholdId(householdId)
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
 
     return {
       goals: await Promise.all(goals
         .filter(goal => !goal.userId || goal.userId === userId)
-        .map(goal => this.toGoal(goal)))
+        .map(goal => this.toGoal(goal, onlyMember)))
     }
   }
 
@@ -1124,6 +1146,12 @@ export class HouseholdService {
   }
 
   private async getGoalUserId(householdId: string, input: SaveGoalDto) {
+    const members = await this.usersRepository.listByHouseholdId(householdId)
+
+    if (members.length === 1) {
+      return members[0]!.userId
+    }
+
     const userId = typeof input?.userId === 'string' && input.userId.trim() ? input.userId.trim() : null
 
     if (!userId) {
@@ -1139,24 +1167,32 @@ export class HouseholdService {
     return user.id
   }
 
-  private async toGoal(goal: GoalEntity) {
+  private async toGoal(goal: GoalEntity, assignedUser: HouseholdMember | null = null) {
     const sortedTargets = [...(goal.targets || [])]
       .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))
     const transactionCount = await this.goalsRepository.countTransactions(goal.id)
+    const user = goal.user
+      ? {
+          userId: goal.user.id,
+          name: goal.user.name,
+          email: goal.user.email,
+          avatarUrl: goal.user.avatarUrl
+        }
+      : assignedUser
+        ? {
+            userId: assignedUser.userId,
+            name: assignedUser.name,
+            email: assignedUser.email,
+            avatarUrl: assignedUser.avatarUrl
+          }
+        : null
 
     return {
       id: goal.id,
       householdId: goal.householdId,
       name: goal.name,
-      userId: goal.userId,
-      user: goal.user
-        ? {
-            userId: goal.user.id,
-            name: goal.user.name,
-            email: goal.user.email,
-            avatarUrl: goal.user.avatarUrl
-          }
-        : null,
+      userId: goal.userId || assignedUser?.userId || null,
+      user,
       startDate: goal.startDate,
       endDate: goal.endDate,
       includeInBudget: goal.includeInBudget,

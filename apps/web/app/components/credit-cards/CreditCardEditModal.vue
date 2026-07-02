@@ -24,6 +24,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
+const householdAssignmentValue = 'household'
 const isOpen = ref<boolean>(false)
 const selectedCreditCard = ref<CreditCard | null>(null)
 const isSaving = ref<boolean>(false)
@@ -40,7 +41,7 @@ const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
     ...(hasMultipleMembers.value
       ? [{
           label: 'Household',
-          value: ''
+          value: householdAssignmentValue
         }]
       : []),
     ...(authStore.user
@@ -109,7 +110,7 @@ async function save(event: CreditCardEditFormSubmitEvent) {
   try {
     const input: SaveCreditCardInput = {
       name: event.data.name.trim(),
-      userId: event.data.userId || null,
+      userId: event.data.userId === householdAssignmentValue ? null : event.data.userId,
       dueDate: formatDateToString(event.data.dueDate),
       limit: event.data.limit,
       startDate: selectedCreditCard.value.startDate
@@ -128,7 +129,7 @@ async function save(event: CreditCardEditFormSubmitEvent) {
 
 function resetForm(creditCard?: CreditCard) {
   formData.name = creditCard?.name || ''
-  formData.userId = creditCard?.user?.userId || ''
+  formData.userId = creditCard?.user?.userId || (hasMultipleMembers.value ? householdAssignmentValue : authStore.userId)
   formData.dueDate = creditCard ? parseDateString(creditCard.dueDate) : null
   formData.limit = creditCard?.currentLimit ?? null
 }

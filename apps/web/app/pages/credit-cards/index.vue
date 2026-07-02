@@ -16,26 +16,35 @@ const householdStore = useHouseholdStore()
 const creditCardsStore = useCreditCardsStore()
 
 const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || creditCardsStore.isLoading)
+const selectedUserId = computed<string | null>(() => {
+  return householdStore.membersCount === 1 ? householdStore.members[0]?.userId || authStore.userId || null : null
+})
+const creditCards = computed(() => {
+  return selectedUserId.value ? creditCardsStore.userCreditCardList(selectedUserId.value) : creditCardsStore.householdCreditCards
+})
 
 async function refresh() {
+  if (selectedUserId.value) {
+    await creditCardsStore.fetchUserCreditCards(selectedUserId.value)
+    return
+  }
+
   await creditCardsStore.fetchHouseholdCreditCards(householdStore.householdId)
 }
 
-await Promise.all([
-  householdStore.fetchHousehold(),
-  refresh()
-])
+await householdStore.fetchHousehold()
+await refresh()
 </script>
 
 <template>
   <UContainer class="py-6">
     <CreditCardsPageHeader
-      :user-id="null"
+      :user-id="selectedUserId"
       @refresh="refresh"
     />
 
     <CreditCardsPageList
-      :credit-cards="creditCardsStore.householdCreditCards"
+      :credit-cards="creditCards"
       :is-loading="isLoading"
       @refresh="refresh"
     />

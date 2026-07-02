@@ -97,7 +97,9 @@ The API validates:
 - dates use `YYYY-MM-DD`
 - the limit is greater than zero
 - the balance is zero or greater
-- user-assigned cards can only be assigned to the current user
+- one-member households assign cards to that user
+- multi-member households allow assignment to the household or the current user
+- users cannot assign cards to another household member
 
 ## Updating Credit Cards
 
@@ -113,7 +115,7 @@ Updating a limit does not overwrite older limit records with different dates. Th
 
 The edit form does not expose `start_date` or `end_date`. It submits the existing card `startDate` with the save payload so the API can upsert the limit for that date. Canceled cards do not show the edit action, and the API rejects direct update requests for canceled cards.
 
-The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the card belongs to the household.
+The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the card belongs to the household and is only valid for multi-member households.
 
 ## Updating Balances
 
@@ -143,6 +145,8 @@ The effective date must be on or after the card `start_date`. Already canceled c
 The `/credit-cards` page loads household cards from `GET /households/:householdId/credit-cards`.
 
 The household list returns household-assigned cards. User-assigned cards are shown on `/credit-cards/:userId` and loaded from `GET /users/:userId/credit-cards`.
+
+When a household has only one member, the `/credit-cards` page selects that member's list. The user list endpoint also includes legacy household-assigned rows for one-member households so existing records remain visible while new and edited records are saved as user-assigned.
 
 The frontend can filter the visible list to active cards. A card is considered active only when `endDate` is null. Any card with `endDate` set is treated as canceled, even if the date is today or in the future.
 
@@ -188,6 +192,8 @@ The edit form asks for:
 - assignment
 - due date
 - limit
+
+The assignment control follows the ownership rules. One-member households only use the current user assignment. Multi-member households can choose household or current-user assignment.
 
 The update balance form asks for:
 

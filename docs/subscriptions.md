@@ -97,7 +97,9 @@ The API validates:
 - dates use `YYYY-MM-DD`
 - the due date is on or after the start date
 - the amount is greater than zero
-- user-assigned subscriptions can only be assigned to the current user
+- one-member households assign subscriptions to that user
+- multi-member households allow assignment to the household or the current user
+- users cannot assign subscriptions to another household member
 
 ## Updating Subscriptions
 
@@ -115,7 +117,7 @@ Changing an amount no longer closes the old subscription and creates a replaceme
 
 The edit form does not expose `start_date` or `end_date`. It submits the existing subscription `startDate` with the save payload. Cancellation owns `end_date` changes through the cancellation endpoint.
 
-The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the subscription belongs to the household.
+The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the subscription belongs to the household and is only valid for multi-member households.
 
 ## Canceling Subscriptions
 
@@ -138,6 +140,8 @@ The effective date must be on or after the subscription `start_date`. Already ca
 The `/subscriptions` page loads household subscriptions from `GET /households/:householdId/subscriptions`.
 
 The household list returns household-assigned subscriptions. User-assigned subscriptions are shown on `/subscriptions/:userId` and loaded from `GET /users/:userId/subscriptions`.
+
+When a household has only one member, the `/subscriptions` page selects that member's list. The user list endpoint also includes legacy household-assigned rows for one-member households so existing records remain visible while new and edited records are saved as user-assigned.
 
 The frontend can filter the returned list to active subscriptions. A subscription is considered active only when `end_date` is null. Any subscription with `end_date` set is treated as canceled, even if the date is today or in the future.
 
@@ -190,6 +194,8 @@ The edit form asks for:
 - type
 - next due date, with a minimum of start date
 - autopay
+
+The assignment control follows the ownership rules. One-member households only use the current user assignment. Multi-member households can choose household or current-user assignment.
 
 The cancel form asks for:
 

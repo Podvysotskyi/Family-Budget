@@ -25,6 +25,7 @@ const emit = defineEmits<{
   saved: []
 }>()
 
+const householdAssignmentValue = 'household'
 const typeOptions: { label: string, value: SubscriptionType }[] = [
   {
     label: 'Monthly',
@@ -55,7 +56,7 @@ const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
     ...(hasMultipleMembers.value
       ? [{
           label: 'Household',
-          value: ''
+          value: householdAssignmentValue
         }]
       : []),
     ...(authStore.user
@@ -128,7 +129,7 @@ async function save(event: SubscriptionEditFormSubmitEvent) {
     const nextChargeDate = formatDateToString(event.data.nextChargeDate)
     const input: SaveSubscriptionInput = {
       name: event.data.name.trim(),
-      userId: event.data.userId || null,
+      userId: event.data.userId === householdAssignmentValue ? null : event.data.userId,
       type: event.data.type,
       startDate: selectedSubscription.value.startDate,
       endDate: null,
@@ -152,7 +153,7 @@ function resetForm(subscription?: Subscription) {
   const nextChargeDate = subscription?.nextChargeDate || subscription?.startDate || ''
 
   formData.name = subscription?.name || ''
-  formData.userId = subscription?.user?.userId || ''
+  formData.userId = subscription?.user?.userId || (hasMultipleMembers.value ? householdAssignmentValue : authStore.userId)
   formData.type = subscription?.type || 'monthly'
   formData.nextChargeDate = nextChargeDate ? parseDateString(nextChargeDate) : null
   formData.amount = subscription?.amount ?? null

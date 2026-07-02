@@ -16,8 +16,19 @@ const householdStore = useHouseholdStore()
 const subscriptionsStore = useSubscriptionsStore()
 
 const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || subscriptionsStore.isLoading)
+const selectedUserId = computed<string | null>(() => {
+  return householdStore.membersCount === 1 ? householdStore.members[0]?.userId || authStore.userId || null : null
+})
+const subscriptions = computed(() => {
+  return selectedUserId.value ? subscriptionsStore.userSubscriptionList(selectedUserId.value) : subscriptionsStore.householdSubscriptions
+})
 
 async function refresh() {
+  if (selectedUserId.value) {
+    await subscriptionsStore.fetchUserSubscriptions(selectedUserId.value)
+    return
+  }
+
   await subscriptionsStore.fetchHouseholdSubscriptions(householdStore.householdId)
 }
 
@@ -28,12 +39,12 @@ await refresh()
 <template>
   <UContainer class="py-6">
     <SubscriptionsPageHeader
-      :user-id="null"
+      :user-id="selectedUserId"
       @refresh="refresh"
     />
 
     <SubscriptionsPageList
-      :subscriptions="subscriptionsStore.householdSubscriptions"
+      :subscriptions="subscriptions"
       :is-loading="isLoading"
       @refresh="refresh"
     />
