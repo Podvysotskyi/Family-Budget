@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Goal, GoalTargetType } from '~/types/goals'
 import GoalCloseModal from '~/components/goals/GoalCloseModal.vue'
-import GoalDeleteModal from '~/components/goals/GoalDeleteModal.vue'
 import GoalEditModal from '~/components/goals/GoalEditModal.vue'
 import { useAuthStore } from '~/stores/auth'
 
@@ -22,15 +21,15 @@ const emit = defineEmits<{
 }>()
 
 const goalCloseModal = ref<InstanceType<typeof GoalCloseModal> | null>(null)
-const goalDeleteModal = ref<InstanceType<typeof GoalDeleteModal> | null>(null)
 const goalEditModal = ref<InstanceType<typeof GoalEditModal> | null>(null)
 
 const canEditGoal = computed<boolean>(() => !props.goal.user || props.goal.user.userId === authStore.userId)
 const isClosedGoal = computed<boolean>(() => Boolean(props.goal.endDate && props.goal.endDate < getTodayDateString()))
+const canUpdateGoal = computed<boolean>(() => canEditGoal.value && !isClosedGoal.value)
 const assignmentLabel = computed<string>(() => props.goal.user?.name || 'Household')
 
 function editGoal() {
-  if (!canEditGoal.value) {
+  if (!canUpdateGoal.value) {
     return
   }
 
@@ -38,19 +37,11 @@ function editGoal() {
 }
 
 function closeGoal() {
-  if (!canEditGoal.value || isClosedGoal.value) {
+  if (!canUpdateGoal.value) {
     return
   }
 
   goalCloseModal.value?.open(props.goal)
-}
-
-function deleteGoal() {
-  if (!canEditGoal.value || !props.goal.canDeletePermanently) {
-    return
-  }
-
-  goalDeleteModal.value?.open(props.goal)
 }
 
 function formatTargetType(type: GoalTargetType | undefined) {
@@ -68,7 +59,7 @@ function formatTargetType(type: GoalTargetType | undefined) {
 
 <template>
   <div>
-    <div class="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between">
+    <div class="grid gap-3 px-5 py-4 md:grid-cols-[minmax(0,1fr)_10rem_auto] md:items-center">
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
           <p class="truncate text-sm font-medium text-highlighted">
@@ -93,15 +84,27 @@ function formatTargetType(type: GoalTargetType | undefined) {
           />
         </div>
         <p class="mt-1 text-sm text-muted">
-          {{ formatCurrency(goal.currentTarget?.amount ?? null, 'No target') }} · {{ formatTargetType(goal.currentTarget?.type) }} · {{ formatDateString(goal.startDate) }} - {{ formatDateString(goal.endDate, 'No end date') }}
+          {{ formatDateString(goal.startDate) }} - {{ formatDateString(goal.endDate, 'No end date') }}
         </p>
         <p class="mt-1 text-xs text-muted">
           Target effective {{ formatDateString(goal.currentTarget?.date || null) }} · {{ goal.transactionCount }} transactions
         </p>
       </div>
 
+      <div class="min-w-0 md:text-right">
+        <p class="text-xs font-medium uppercase text-muted">
+          Target
+        </p>
+        <p class="mt-1 text-sm font-medium text-highlighted">
+          {{ formatCurrency(goal.currentTarget?.amount ?? null, 'No target') }}
+        </p>
+        <p class="mt-1 text-xs text-muted">
+          {{ formatTargetType(goal.currentTarget?.type) }}
+        </p>
+      </div>
+
       <div
-        v-if="canEditGoal"
+        v-if="canUpdateGoal"
         class="flex items-center gap-1"
       >
         <UButton
@@ -112,20 +115,11 @@ function formatTargetType(type: GoalTargetType | undefined) {
           @click="editGoal"
         />
         <UButton
-          v-if="!isClosedGoal"
           icon="i-lucide-archive"
           color="warning"
           variant="ghost"
           aria-label="Close goal"
           @click="closeGoal"
-        />
-        <UButton
-          v-if="goal.canDeletePermanently"
-          icon="i-lucide-trash-2"
-          color="error"
-          variant="ghost"
-          aria-label="Delete goal permanently"
-          @click="deleteGoal"
         />
       </div>
     </div>
@@ -137,11 +131,6 @@ function formatTargetType(type: GoalTargetType | undefined) {
 
     <GoalCloseModal
       ref="goalCloseModal"
-      @saved="emit('refresh')"
-    />
-
-    <GoalDeleteModal
-      ref="goalDeleteModal"
       @saved="emit('refresh')"
     />
   </div>

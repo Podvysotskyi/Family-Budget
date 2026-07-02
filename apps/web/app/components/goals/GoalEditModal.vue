@@ -2,9 +2,9 @@
 import { z } from 'zod'
 import type {
   Goal,
-  GoalFormData,
-  GoalFormSubmitData,
-  GoalFormSubmitEvent,
+  GoalEditFormData,
+  GoalEditFormSubmitData,
+  GoalEditFormSubmitEvent,
   GoalTargetType,
   SaveGoalInput
 } from '~/types/goals'
@@ -46,7 +46,7 @@ const targetTypeOptions: { label: string, value: GoalTargetType }[] = [
 const isOpen = ref<boolean>(false)
 const selectedGoal = ref<Goal | null>(null)
 const isSaving = ref<boolean>(false)
-const formData = reactive<GoalFormData>({
+const formData = reactive<GoalEditFormData>({
   name: '',
   userId: '',
   startDate: null,
@@ -73,17 +73,20 @@ const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
   ]
 })
 const endDateMin = computed<Date>(() => formData.startDate || getToday())
-const formSchema = computed<z.ZodType<GoalFormSubmitData>>(() => z.object({
+const formSchema = computed<z.ZodType<GoalEditFormSubmitData>>(() => z.object({
   name: z.string().trim().min(1, 'Goal name is required.'),
   userId: z.string(),
   startDate: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Start date is required.')
   ),
-  endDate: z
-    .date()
-    .nullable()
-    .refine(value => !value || value >= endDateMin.value, 'End date must be on or after the start date.'),
+  endDate: z.preprocess(
+    value => value === null ? null : value,
+    z.date().nullable().refine(
+      value => !value || value >= endDateMin.value,
+      'End date must be on or after the start date.'
+    )
+  ),
   includeInBudget: z.boolean(),
   targetType: z.enum(['monthly', 'weekly', 'total']),
   targetAmount: z.preprocess(
@@ -122,8 +125,10 @@ function handleClose() {
   emit('closed')
 }
 
-async function save(event: GoalFormSubmitEvent) {
-  if (!selectedGoal.value || !householdStore.householdId) {
+async function save(event: GoalEditFormSubmitEvent) {
+  const goal = selectedGoal.value
+
+  if (!goal) {
     return
   }
 
@@ -140,7 +145,7 @@ async function save(event: GoalFormSubmitEvent) {
       targetAmount: event.data.targetAmount
     }
 
-    await goalsStore.updateGoal(householdStore.householdId, selectedGoal.value.id, input)
+    await goalsStore.updateGoal(goal, input)
     addSuccessToast('Goal saved.')
     emit('saved')
     close(true)

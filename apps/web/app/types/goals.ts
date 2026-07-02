@@ -39,7 +39,29 @@ export type SaveGoalInput = {
   targetAmount: number
 }
 
-export type GoalFormData = {
+export type GoalCreateFormData = {
+  name: string
+  startDate: Date | null
+  endDate: Date | null
+  includeInBudget: boolean
+  targetType: GoalTargetType
+  targetAmount: number | null
+}
+
+export type GoalCreateFormSubmitData = {
+  name: string
+  startDate: Date
+  endDate: Date | null
+  includeInBudget: boolean
+  targetType: GoalTargetType
+  targetAmount: number
+}
+
+export type GoalCreateFormSubmitEvent = {
+  data: GoalCreateFormSubmitData
+}
+
+export type GoalEditFormData = {
   name: string
   userId: string
   startDate: Date | null
@@ -49,7 +71,7 @@ export type GoalFormData = {
   targetAmount: number | null
 }
 
-export type GoalFormSubmitData = {
+export type GoalEditFormSubmitData = {
   name: string
   userId: string
   startDate: Date
@@ -59,6 +81,6 @@ export type GoalFormSubmitData = {
   targetAmount: number
 }
 
-export type GoalFormSubmitEvent = {
-  data: GoalFormSubmitData
+export type GoalEditFormSubmitEvent = {
+  data: GoalEditFormSubmitData
 }

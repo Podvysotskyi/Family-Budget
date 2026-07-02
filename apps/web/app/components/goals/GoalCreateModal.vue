@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { z } from 'zod'
 import type {
-  GoalFormData,
-  GoalFormSubmitData,
-  GoalFormSubmitEvent,
+  GoalCreateFormData,
+  GoalCreateFormSubmitData,
+  GoalCreateFormSubmitEvent,
   GoalTargetType,
   SaveGoalInput
 } from '~/types/goals'
@@ -13,7 +13,6 @@ defineOptions({
   name: 'GoalCreateModal'
 })
 
-const authStore = useAuthStore()
 const goalsStore = useGoalsStore()
 const householdStore = useHouseholdStore()
 const { formatDateToString, getToday } = useDateUtils()
@@ -24,9 +23,6 @@ const emit = defineEmits<{
   created: []
 }>()
 
-const householdAssignmentValue = 'household'
-const hasMultipleMembers = computed<boolean>(() => householdStore.membersCount > 1)
-const defaultUserId = computed<string>(() => authStore.userId || householdStore.members[0]?.userId || '')
 const targetTypeOptions: { label: string, value: GoalTargetType }[] = [
   {
     label: 'Monthly',
@@ -44,9 +40,9 @@ const targetTypeOptions: { label: string, value: GoalTargetType }[] = [
 
 const isOpen = ref<boolean>(false)
 const isSaving = ref<boolean>(false)
-const formData = reactive<GoalFormData>({
+const selectedUserId = ref<string | null>(null)
+const formData = reactive<GoalCreateFormData>({
   name: '',
-  userId: '',
   startDate: null,
   endDate: null,
   includeInBudget: true,
@@ -54,34 +50,20 @@ const formData = reactive<GoalFormData>({
   targetAmount: null
 })
 
-const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
-  return [
-    ...(hasMultipleMembers.value
-      ? [{
-          label: 'Household',
-          value: householdAssignmentValue
-        }]
-      : []),
-    ...(authStore.user
-      ? [{
-          label: authStore.user.name,
-          value: authStore.user.id
-        }]
-      : [])
-  ]
-})
 const endDateMin = computed<Date>(() => formData.startDate || getToday())
-const formSchema = computed<z.ZodType<GoalFormSubmitData>>(() => z.object({
+const formSchema = computed<z.ZodType<GoalCreateFormSubmitData>>(() => z.object({
   name: z.string().trim().min(1, 'Goal name is required.'),
-  userId: z.string(),
   startDate: z.preprocess(
     value => value === null ? undefined : value,
     z.date('Start date is required.')
   ),
-  endDate: z
-    .date()
-    .nullable()
-    .refine(value => !value || value >= endDateMin.value, 'End date must be on or after the start date.'),
+  endDate: z.preprocess(
+    value => value === null ? null : value,
+    z.date().nullable().refine(
+      value => !value || value >= endDateMin.value,
+      'End date must be on or after the start date.'
+    )
+  ),
   includeInBudget: z.boolean(),
   targetType: z.enum(['monthly', 'weekly', 'total']),
   targetAmount: z.preprocess(
@@ -96,7 +78,8 @@ watch(() => formData.startDate, (startDate) => {
   }
 })
 
-function open() {
+function open(userId: string | null) {
+  selectedUserId.value = userId
   resetForm()
   isOpen.value = true
 }
@@ -114,11 +97,12 @@ function handleClose() {
     return
   }
 
+  selectedUserId.value = null
   resetForm()
   emit('closed')
 }
 
-async function save(event: GoalFormSubmitEvent) {
+async function save(event: GoalCreateFormSubmitEvent) {
   if (!householdStore.householdId) {
     return
   }
@@ -128,7 +112,7 @@ async function save(event: GoalFormSubmitEvent) {
   try {
     const input: SaveGoalInput = {
       name: event.data.name.trim(),
-      userId: event.data.userId === householdAssignmentValue ? null : event.data.userId,
+      userId: selectedUserId.value,
       startDate: formatDateToString(event.data.startDate),
       endDate: event.data.endDate ? formatDateToString(event.data.endDate) : null,
       includeInBudget: event.data.includeInBudget,
@@ -136,7 +120,7 @@ async function save(event: GoalFormSubmitEvent) {
       targetAmount: event.data.targetAmount
     }
 
-    await goalsStore.createGoal(householdStore.householdId, input)
+    await goalsStore.createHouseholdGoal(householdStore.householdId, input)
     addSuccessToast('Goal created.')
     emit('created')
     close(true)
@@ -149,7 +133,6 @@ async function save(event: GoalFormSubmitEvent) {
 
 function resetForm() {
   formData.name = ''
-  formData.userId = defaultUserId.value || householdAssignmentValue
   formData.startDate = getToday()
   formData.endDate = null
   formData.includeInBudget = true
@@ -194,35 +177,23 @@ defineExpose({
           />
         </UFormField>
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <UFormField
-            label="Assignment"
-            name="userId"
-            required
-          >
-            <USelect
-              id="goal-create-assignment"
-              v-model="formData.userId"
-              class="w-full"
-              :items="assignmentOptions"
-              :disabled="isSaving || !hasMultipleMembers"
-            />
-          </UFormField>
-
-          <UFormField
-            label="Target type"
-            name="targetType"
-            required
-          >
-            <USelect
-              id="goal-create-target-type"
-              v-model="formData.targetType"
-              class="w-full"
-              :items="targetTypeOptions"
-              :disabled="isSaving"
-            />
-          </UFormField>
-        </div>
+        <UFormField
+          label="Target amount"
+          name="targetAmount"
+          required
+        >
+          <UInput
+            id="goal-create-target-amount"
+            v-model.nullable="formData.targetAmount"
+            class="w-full"
+            icon="i-lucide-dollar-sign"
+            type="number"
+            min="0.01"
+            step="0.01"
+            placeholder="0.00"
+            :disabled="isSaving"
+          />
+        </UFormField>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField
@@ -255,19 +226,15 @@ defineExpose({
         </div>
 
         <UFormField
-          label="Target amount"
-          name="targetAmount"
+          label="Target type"
+          name="targetType"
           required
         >
-          <UInput
-            id="goal-create-target-amount"
-            v-model.nullable="formData.targetAmount"
+          <USelect
+            id="goal-create-target-type"
+            v-model="formData.targetType"
             class="w-full"
-            icon="i-lucide-dollar-sign"
-            type="number"
-            min="0.01"
-            step="0.01"
-            placeholder="0.00"
+            :items="targetTypeOptions"
             :disabled="isSaving"
           />
         </UFormField>

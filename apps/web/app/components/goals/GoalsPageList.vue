@@ -9,7 +9,6 @@ defineOptions({
 const props = defineProps<{
   goals: Goal[]
   isLoading: boolean
-  hasHousehold: boolean
 }>()
 
 const emit = defineEmits<{
@@ -39,7 +38,7 @@ function isActiveGoal(goal: Goal) {
       <USwitch
         v-model="showOnlyActiveGoals"
         label="Active only"
-        :disabled="isLoading || !hasHousehold"
+        :disabled="isLoading"
       />
     </div>
 
@@ -49,19 +48,6 @@ function isActiveGoal(goal: Goal) {
     >
       <USkeleton class="h-16 w-full" />
       <USkeleton class="h-16 w-full" />
-    </div>
-
-    <div
-      v-else-if="!hasHousehold"
-      class="px-5 py-4 text-sm text-muted"
-    >
-      <UAlert
-        color="error"
-        variant="subtle"
-        icon="i-lucide-database"
-        title="Goals are unavailable"
-        description="Check that your user has a household."
-      />
     </div>
 
     <div

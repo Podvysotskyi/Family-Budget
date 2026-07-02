@@ -49,20 +49,16 @@ export const useGoalsStore = defineStore('goals', {
       }
     },
 
-    async createGoal(householdId: string, input: SaveGoalInput) {
+    async createHouseholdGoal(householdId: string, input: SaveGoalInput) {
       await post(`/households/${householdId}/goals`, input)
     },
 
-    async updateGoal(householdId: string, goalId: string, input: SaveGoalInput) {
-      await patch(`/households/${householdId}/goals/${goalId}`, input)
+    async updateGoal(goal: Goal, input: SaveGoalInput) {
+      await patch(`/households/${goal.householdId}/goals/${goal.id}`, input)
     },
 
-    async closeGoal(householdId: string, goalId: string) {
-      await deleteRequest(`/households/${householdId}/goals/${goalId}`)
-    },
-
-    async permanentlyDeleteGoal(householdId: string, goalId: string) {
-      await deleteRequest(`/households/${householdId}/goals/${goalId}/permanent`)
+    async closeGoal(goal: Goal) {
+      await deleteRequest(`/households/${goal.householdId}/goals/${goal.id}`)
     }
   }
 })

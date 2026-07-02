@@ -14,10 +14,16 @@ const emit = defineEmits<{
   refresh: []
 }>()
 
+const authStore = useAuthStore()
+const householdStore = useHouseholdStore()
 const goalCreateModal = ref<InstanceType<typeof GoalCreateModal> | null>(null)
 
+const selectedUserId = computed<string | null>(() => {
+  return householdStore.membersCount === 1 ? householdStore.members[0]?.userId || authStore.userId || null : null
+})
+
 function createGoal() {
-  goalCreateModal.value?.open()
+  goalCreateModal.value?.open(selectedUserId.value)
 }
 </script>
 

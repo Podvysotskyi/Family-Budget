@@ -12,9 +12,10 @@ definePageMeta({
 })
 
 const householdStore = useHouseholdStore()
+const authStore = useAuthStore()
 const goalsStore = useGoalsStore()
 
-const isLoading = computed<boolean>(() => householdStore.isLoading || goalsStore.isLoading)
+const isLoading = computed<boolean>(() => authStore.isLoading || householdStore.isLoading || goalsStore.isLoading)
 const hasHousehold = computed<boolean>(() => Boolean(householdStore.householdId))
 
 async function refresh() {
@@ -36,7 +37,6 @@ await refresh()
     <GoalsPageList
       :goals="goalsStore.householdGoalList"
       :is-loading="isLoading"
-      :has-household="hasHousehold"
       @refresh="refresh"
     />
   </UContainer>

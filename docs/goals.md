@@ -147,18 +147,17 @@ The `/goals` page supports:
 - editing goal metadata
 - changing the target amount or target type
 - closing a goal
-- permanently deleting a goal when it has no transactions
 - showing active goals only
 
-The assignment control follows the household ownership rules. One-member households only show the current user assignment. Multi-member households show household and current-user assignment options.
+The create modal follows the household ownership rules through its page context. One-member households create user-assigned goals for that member. Multi-member households create household-assigned goals from the shared goals page. The edit modal still exposes the assignment control for allowed household/current-user assignment changes.
+
+Goal row actions follow the visible ownership and lifecycle state. Household goals and current-user goals can be edited or closed while active. Closed goals do not show edit or close actions.
 
 The close confirmation tells the user that the action sets the goal end date and keeps transactions intact.
 
-The permanent delete action is shown only when `canDeletePermanently` is true.
+The Nuxt page owns household loading and list refresh. The page header owns the create modal, list items own row edit/close modals, and successful modal actions emit a refresh event back to the page.
 
-The Nuxt page owns household loading and list refresh. The page header owns the create modal, list items own row edit/close/delete modals, and successful modal actions emit a refresh event back to the page.
-
-The goals Pinia store keeps the active household goal list, exposes read-only getters, and does not implicitly reload the list after create, update, close, or permanent delete actions.
+The goals Pinia store keeps the active household goal list, exposes read-only getters, and does not implicitly reload the list after create, update, or close actions.
 
 ## Timezone
 

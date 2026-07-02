@@ -7,7 +7,6 @@ defineOptions({
 })
 
 const goalsStore = useGoalsStore()
-const householdStore = useHouseholdStore()
 const { addErrorToast, addSuccessToast } = useAppToast()
 
 const emit = defineEmits<{
@@ -35,14 +34,16 @@ function close(force = false) {
 }
 
 async function save() {
-  if (!selectedGoal.value || !householdStore.householdId) {
+  const goal = selectedGoal.value
+
+  if (!goal) {
     return
   }
 
   isSaving.value = true
 
   try {
-    await goalsStore.closeGoal(householdStore.householdId, selectedGoal.value.id)
+    await goalsStore.closeGoal(goal)
     addSuccessToast('Goal closed.')
     emit('saved')
     close(true)
