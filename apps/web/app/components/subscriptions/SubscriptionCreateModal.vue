@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { z } from 'zod'
+import {z} from 'zod'
 import type {
   SaveSubscriptionInput,
   SubscriptionCreateFormData,
@@ -14,15 +14,17 @@ defineOptions({
 })
 
 const subscriptionsStore = useSubscriptionsStore()
+const authStore = useAuthStore()
 const householdStore = useHouseholdStore()
-const { formatDateToString, getToday } = useDateUtils()
-const { addErrorToast, addSuccessToast } = useAppToast()
+const {formatDateToString, getToday} = useDateUtils()
+const {addErrorToast, addSuccessToast} = useAppToast()
 
 const emit = defineEmits<{
   closed: []
   created: []
 }>()
 
+const householdAssignmentValue = 'household'
 const typeOptions: { label: string, value: SubscriptionType }[] = [
   {
     label: 'Monthly',
@@ -39,6 +41,7 @@ const isSaving = ref<boolean>(false)
 const selectedUserId = ref<string | null>(null)
 const formData = reactive<SubscriptionCreateFormData>({
   name: '',
+  userId: '',
   type: 'monthly',
   startDate: null,
   dueDate: null,
@@ -47,11 +50,29 @@ const formData = reactive<SubscriptionCreateFormData>({
   autopay: false
 })
 
+const hasMultipleMembers = computed<boolean>(() => householdStore.membersCount > 1)
+const assignmentOptions = computed<{ label: string, value: string }[]>(() => {
+  return [
+    ...(hasMultipleMembers.value
+      ? [{
+          label: 'Household',
+          value: householdAssignmentValue
+        }]
+      : []),
+    ...(authStore.user
+      ? [{
+          label: authStore.user.name,
+          value: authStore.user.id
+        }]
+      : [])
+  ]
+})
 const endDateMin = computed<Date>(() => formData.startDate || getToday())
 const dueDateMin = computed<Date>(() => formData.startDate || getToday())
 const dueDateMax = computed<Date | undefined>(() => formData.endDate || undefined)
 const formSchema = computed<z.ZodType<SubscriptionCreateFormSubmitData>>(() => z.object({
   name: z.string().trim().min(1, 'Subscription name is required.'),
+  userId: z.string(),
   type: z.enum(['monthly', 'yearly']),
   startDate: z.preprocess(
     value => value === null ? undefined : value,
@@ -128,9 +149,10 @@ async function save(event: SubscriptionCreateFormSubmitEvent) {
   isSaving.value = true
 
   try {
+    const userId = event.data.userId === householdAssignmentValue ? null : event.data.userId
     const input: SaveSubscriptionInput = {
       name: event.data.name.trim(),
-      userId: selectedUserId.value,
+      userId,
       type: event.data.type,
       startDate: formatDateToString(event.data.startDate),
       endDate: event.data.endDate ? formatDateToString(event.data.endDate) : null,
@@ -139,8 +161,8 @@ async function save(event: SubscriptionCreateFormSubmitEvent) {
       autopay: event.data.autopay
     }
 
-    if (selectedUserId.value) {
-      await subscriptionsStore.createUserSubscription(selectedUserId.value, input)
+    if (userId) {
+      await subscriptionsStore.createUserSubscription(userId, input)
     } else {
       await subscriptionsStore.createHouseholdSubscription(householdStore.householdId, input)
     }
@@ -157,6 +179,7 @@ async function save(event: SubscriptionCreateFormSubmitEvent) {
 
 function resetForm() {
   formData.name = ''
+  formData.userId = selectedUserId.value || (hasMultipleMembers.value ? householdAssignmentValue : authStore.userId)
   formData.type = 'monthly'
   formData.startDate = getToday()
   formData.dueDate = getToday()
@@ -203,22 +226,52 @@ defineExpose({
         </UFormField>
 
         <UFormField
-          label="Amount"
-          name="amount"
+          v-if="hasMultipleMembers"
+          label="Assignment"
+          name="userId"
           required
         >
-          <UInput
-            id="subscription-create-amount"
-            v-model.nullable="formData.amount"
+          <USelect
+            id="subscription-create-assignment"
+            v-model="formData.userId"
             class="w-full"
-            icon="i-lucide-dollar-sign"
-            type="number"
-            min="0.01"
-            step="0.01"
-            placeholder="0.00"
+            :items="assignmentOptions"
             :disabled="isSaving"
           />
         </UFormField>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <UFormField
+            label="Type"
+            name="type"
+            required
+          >
+            <USelect
+              id="subscription-create-type"
+              v-model="formData.type"
+              class="w-full"
+              :items="typeOptions"
+              :disabled="isSaving"
+            />
+          </UFormField>
+          <UFormField
+            label="Amount"
+            name="amount"
+            required
+          >
+            <UInput
+              id="subscription-create-amount"
+              v-model.nullable="formData.amount"
+              class="w-full"
+              icon="i-lucide-dollar-sign"
+              type="number"
+              min="0.01"
+              step="0.01"
+              placeholder="0.00"
+              :disabled="isSaving"
+            />
+          </UFormField>
+        </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField
@@ -249,20 +302,6 @@ defineExpose({
             />
           </UFormField>
         </div>
-
-        <UFormField
-          label="Type"
-          name="type"
-          required
-        >
-          <USelect
-            id="subscription-create-type"
-            v-model="formData.type"
-            class="w-full"
-            :items="typeOptions"
-            :disabled="isSaving"
-          />
-        </UFormField>
 
         <UFormField
           label="Due date"

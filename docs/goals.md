@@ -149,7 +149,7 @@ The `/goals` page supports:
 - closing a goal
 - showing active goals only
 
-The create modal follows the household ownership rules through its page context. One-member households create user-assigned goals for that member. Multi-member households create household-assigned goals from the shared goals page. The edit modal still exposes the assignment control for allowed household/current-user assignment changes.
+The create modal follows the household ownership rules through its page context. One-member households create user-assigned goals for that member. Multi-member households create household-assigned goals from the shared goals page. The edit modal preserves the original start date and shows the assignment control only for multi-member households, where allowed household/current-user assignment changes are available.
 
 Goal row actions follow the visible ownership and lifecycle state. Household goals and current-user goals can be edited or closed while active. Closed goals do not show edit or close actions.
 

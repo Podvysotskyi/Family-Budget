@@ -115,7 +115,7 @@ Updating a limit does not overwrite older limit records with different dates. Th
 
 The edit form does not expose `start_date` or `end_date`. It submits the existing card `startDate` with the save payload so the API can upsert the limit for that date. Canceled cards do not show the edit action, and the API rejects direct update requests for canceled cards.
 
-The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the card belongs to the household and is only valid for multi-member households.
+The edit assignment select is shown only when the household has multiple members. A null user assignment means the card belongs to the household and is only valid for multi-member households.
 
 ## Updating Balances
 
@@ -189,11 +189,11 @@ The create form asks for:
 The edit form asks for:
 
 - name
-- assignment
+- assignment, for multi-member households
 - due date
 - limit
 
-The assignment control follows the ownership rules. One-member households only use the current user assignment. Multi-member households can choose household or current-user assignment.
+The assignment control follows the ownership rules. One-member households hide the assignment control and use the current user assignment. Multi-member households can choose household or current-user assignment.
 
 The update balance form asks for:
 

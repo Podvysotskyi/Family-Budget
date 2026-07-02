@@ -172,6 +172,7 @@ defineExpose({
         </UFormField>
 
         <UFormField
+          v-if="hasMultipleMembers"
           label="Assignment"
           name="userId"
           required
@@ -181,7 +182,7 @@ defineExpose({
             v-model="formData.userId"
             class="w-full"
             :items="assignmentOptions"
-            :disabled="isSaving || !hasMultipleMembers"
+            :disabled="isSaving"
           />
         </UFormField>
 

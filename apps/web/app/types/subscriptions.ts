@@ -34,6 +34,7 @@ export type CancelSubscriptionInput = {
 
 export type SubscriptionCreateFormData = {
   name: string
+  userId: string
   type: SubscriptionType
   startDate: Date | null
   dueDate: Date | null
@@ -44,6 +45,7 @@ export type SubscriptionCreateFormData = {
 
 export type SubscriptionCreateFormSubmitData = {
   name: string
+  userId: string
   type: SubscriptionType
   startDate: Date
   dueDate: Date

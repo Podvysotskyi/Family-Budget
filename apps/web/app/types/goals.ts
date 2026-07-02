@@ -64,7 +64,6 @@ export type GoalCreateFormSubmitEvent = {
 export type GoalEditFormData = {
   name: string
   userId: string
-  startDate: Date | null
   endDate: Date | null
   includeInBudget: boolean
   targetType: GoalTargetType
@@ -74,7 +73,6 @@ export type GoalEditFormData = {
 export type GoalEditFormSubmitData = {
   name: string
   userId: string
-  startDate: Date
   endDate: Date | null
   includeInBudget: boolean
   targetType: GoalTargetType

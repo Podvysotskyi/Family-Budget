@@ -117,7 +117,7 @@ Changing an amount no longer closes the old subscription and creates a replaceme
 
 The edit form does not expose `start_date` or `end_date`. It submits the existing subscription `startDate` with the save payload. Cancellation owns `end_date` changes through the cancellation endpoint.
 
-The edit assignment select is disabled when the household does not have multiple members. A null user assignment means the subscription belongs to the household and is only valid for multi-member households.
+The assignment select is shown only when the household has multiple members. A null user assignment means the subscription belongs to the household and is only valid for multi-member households.
 
 ## Canceling Subscriptions
 
@@ -179,6 +179,7 @@ Create/edit/cancel modals perform their own store mutation and emit `created` or
 The create form asks for:
 
 - name
+- assignment, for multi-member households
 - amount
 - type
 - start date, defaulting to today
@@ -189,13 +190,13 @@ The create form asks for:
 The edit form asks for:
 
 - name
-- assignment
+- assignment, for multi-member households
 - amount
 - type
 - next due date, with a minimum of start date
 - autopay
 
-The assignment control follows the ownership rules. One-member households only use the current user assignment. Multi-member households can choose household or current-user assignment.
+The assignment control follows the ownership rules. One-member households hide the assignment control and use the current user assignment. Multi-member households can choose household or current-user assignment.
 
 The cancel form asks for:
 
