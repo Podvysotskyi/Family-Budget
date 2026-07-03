@@ -22,6 +22,24 @@ export type BudgetSubscription = {
   amount: number
 }
 
+export type BudgetCreditCard = {
+  id: string
+  name: string
+  userId: string | null
+  occurrenceDate: string
+  amount: number
+  limit: number | null
+}
+
+export type BudgetGoal = {
+  id: string
+  name: string
+  userId: string | null
+  occurrenceDate: string
+  targetType: 'monthly' | 'weekly' | 'total'
+  amount: number
+}
+
 export type SubscriptionTransaction = {
   amount: number
   date: string

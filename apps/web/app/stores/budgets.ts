@@ -1,4 +1,4 @@
-import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment, Income, MonthBudgetResponse, SubscriptionTransaction } from '~/types/budgets'
+import type { BudgetCreditCard, BudgetGoal, BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment, Income, MonthBudgetResponse, SubscriptionTransaction } from '~/types/budgets'
 
 const { delete: deleteRequest, get, post } = useStoreApi()
 
@@ -7,6 +7,12 @@ export const useBudgetsStore = defineStore('budgets', {
     incomeErrorsByBudgetId: {} as Record<string, string | null>,
     incomesByBudgetId: {} as Record<string, Income[]>,
     incomeLoadingByBudgetId: {} as Record<string, boolean>,
+    creditCardErrorsByRangeKey: {} as Record<string, string | null>,
+    creditCardLoadingByRangeKey: {} as Record<string, boolean>,
+    creditCardsByRangeKey: {} as Record<string, BudgetCreditCard[]>,
+    goalErrorsByRangeKey: {} as Record<string, string | null>,
+    goalLoadingByRangeKey: {} as Record<string, boolean>,
+    goalsByRangeKey: {} as Record<string, BudgetGoal[]>,
     monthBudgetErrorsByKey: {} as Record<string, string | null>,
     monthBudgetsByKey: {} as Record<string, MonthBudgetResponse>,
     monthBudgetLoadingByKey: {} as Record<string, boolean>,
@@ -40,12 +46,32 @@ export const useBudgetsStore = defineStore('budgets', {
       return this.incomeLoadingByBudgetId[budgetId] || false
     },
 
+    hasIncomeEntriesLoaded(budgetId: string) {
+      return Object.hasOwn(this.incomesByBudgetId, budgetId) || Boolean(this.incomeErrorsByBudgetId[budgetId])
+    },
+
     getUserSubscriptions(userId: string, fromDate: string, toDate: string) {
       return this.subscriptionsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || []
     },
 
+    getUserCreditCards(userId: string, fromDate: string, toDate: string) {
+      return this.creditCardsByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || []
+    },
+
+    getUserGoals(userId: string, fromDate: string, toDate: string) {
+      return this.goalsByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || []
+    },
+
     getUserSubscriptionTransactions(userId: string, fromDate: string, toDate: string) {
       return this.transactionsByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || []
+    },
+
+    getUserCreditCardsError(userId: string, fromDate: string, toDate: string) {
+      return this.creditCardErrorsByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || null
+    },
+
+    getUserGoalsError(userId: string, fromDate: string, toDate: string) {
+      return this.goalErrorsByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || null
     },
 
     getUserSubscriptionsError(userId: string, fromDate: string, toDate: string) {
@@ -60,8 +86,40 @@ export const useBudgetsStore = defineStore('budgets', {
       return this.subscriptionLoadingByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || false
     },
 
+    hasUserSubscriptionsLoaded(userId: string, fromDate: string, toDate: string) {
+      const key = this.getSubscriptionRangeKey(userId, fromDate, toDate)
+
+      return Object.hasOwn(this.subscriptionsByRangeKey, key) || Boolean(this.subscriptionErrorsByRangeKey[key])
+    },
+
+    isUserCreditCardsLoading(userId: string, fromDate: string, toDate: string) {
+      return this.creditCardLoadingByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || false
+    },
+
+    hasUserCreditCardsLoaded(userId: string, fromDate: string, toDate: string) {
+      const key = this.getRangeKey(userId, fromDate, toDate)
+
+      return Object.hasOwn(this.creditCardsByRangeKey, key) || Boolean(this.creditCardErrorsByRangeKey[key])
+    },
+
+    isUserGoalsLoading(userId: string, fromDate: string, toDate: string) {
+      return this.goalLoadingByRangeKey[this.getRangeKey(userId, fromDate, toDate)] || false
+    },
+
+    hasUserGoalsLoaded(userId: string, fromDate: string, toDate: string) {
+      const key = this.getRangeKey(userId, fromDate, toDate)
+
+      return Object.hasOwn(this.goalsByRangeKey, key) || Boolean(this.goalErrorsByRangeKey[key])
+    },
+
     isUserSubscriptionTransactionsLoading(userId: string, fromDate: string, toDate: string) {
       return this.transactionLoadingByRangeKey[this.getSubscriptionRangeKey(userId, fromDate, toDate)] || false
+    },
+
+    hasUserSubscriptionTransactionsLoaded(userId: string, fromDate: string, toDate: string) {
+      const key = this.getSubscriptionRangeKey(userId, fromDate, toDate)
+
+      return Object.hasOwn(this.transactionsByRangeKey, key) || Boolean(this.transactionErrorsByRangeKey[key])
     },
 
     getMonthBudget(userId: string, month: number, year: number) {
@@ -142,6 +200,60 @@ export const useBudgetsStore = defineStore('budgets', {
         this.subscriptionErrorsByRangeKey[key] = 'Subscriptions could not be loaded'
       } finally {
         this.subscriptionLoadingByRangeKey[key] = false
+      }
+    },
+
+    async fetchUserCreditCards(userId: string, fromDate: string, toDate: string) {
+      const key = this.getRangeKey(userId, fromDate, toDate)
+
+      if (!userId || !fromDate || !toDate || this.creditCardLoadingByRangeKey[key]) {
+        return
+      }
+
+      this.creditCardLoadingByRangeKey[key] = true
+      this.creditCardErrorsByRangeKey[key] = null
+
+      try {
+        const query = new URLSearchParams({
+          from_date: fromDate,
+          to_date: toDate
+        })
+        const response = await get<{
+          creditCards: BudgetCreditCard[]
+        }>(`/user/${userId}/credit-cards/budget?${query.toString()}`)
+
+        this.creditCardsByRangeKey[key] = response.creditCards
+      } catch {
+        this.creditCardErrorsByRangeKey[key] = 'Credit cards could not be loaded'
+      } finally {
+        this.creditCardLoadingByRangeKey[key] = false
+      }
+    },
+
+    async fetchUserGoals(userId: string, fromDate: string, toDate: string) {
+      const key = this.getRangeKey(userId, fromDate, toDate)
+
+      if (!userId || !fromDate || !toDate || this.goalLoadingByRangeKey[key]) {
+        return
+      }
+
+      this.goalLoadingByRangeKey[key] = true
+      this.goalErrorsByRangeKey[key] = null
+
+      try {
+        const query = new URLSearchParams({
+          from_date: fromDate,
+          to_date: toDate
+        })
+        const response = await get<{
+          goals: BudgetGoal[]
+        }>(`/user/${userId}/goals/budget?${query.toString()}`)
+
+        this.goalsByRangeKey[key] = response.goals
+      } catch {
+        this.goalErrorsByRangeKey[key] = 'Goals could not be loaded'
+      } finally {
+        this.goalLoadingByRangeKey[key] = false
       }
     },
 
@@ -249,6 +361,10 @@ export const useBudgetsStore = defineStore('budgets', {
     },
 
     getSubscriptionRangeKey(userId: string, fromDate: string, toDate: string) {
+      return this.getRangeKey(userId, fromDate, toDate)
+    },
+
+    getRangeKey(userId: string, fromDate: string, toDate: string) {
       return `${userId}:${fromDate}:${toDate}`
     }
   }

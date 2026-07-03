@@ -76,6 +76,38 @@ export class UserBudgetsController {
     return this.householdService.listSubscriptionsForCurrentUser(user.id, budgetUserId, parseDateRangeQuery(fromDate, toDate))
   }
 
+  @Get('user/:id/credit-cards/budget')
+  budgetCreditCards(
+    @Param('id') budgetUserId: string,
+    @Query('from_date') fromDate: string | undefined,
+    @Query('to_date') toDate: string | undefined,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.listBudgetCreditCardsForCurrentUser(user.id, budgetUserId, parseDateRangeQuery(fromDate, toDate))
+  }
+
+  @Get('user/:id/goals/budget')
+  budgetGoals(
+    @Param('id') budgetUserId: string,
+    @Query('from_date') fromDate: string | undefined,
+    @Query('to_date') toDate: string | undefined,
+    @Req() request: AuthenticatedRequest
+  ) {
+    const user = requireRequestUser(request)
+
+    if (!budgetUserId) {
+      throw new BadRequestException('User id is required')
+    }
+
+    return this.householdService.listBudgetGoalsForCurrentUser(user.id, budgetUserId, parseDateRangeQuery(fromDate, toDate))
+  }
+
   @Get('user/:id/budget/:budgetId/transactions')
   userTransactions(
     @Param('id') budgetUserId: string,

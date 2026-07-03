@@ -216,6 +216,8 @@ Each returned budget subscription occurrence includes:
 
 This lets historical budget periods show the amount that was effective for that charge date.
 
+The Subscriptions category has `budget_categories.in_summary=true`, so it is always included in the budget summary.
+
 ## Manual Payments
 
 When a user marks a subscription as paid:

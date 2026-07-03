@@ -30,6 +30,7 @@ export class BudgetCategoriesRepository {
 
     return this.budgetCategoriesRepository.save(this.budgetCategoriesRepository.create({
       householdId,
+      inSummary: true,
       name,
       type: null,
       order

@@ -29,6 +29,9 @@ export class BudgetCategoryEntity {
   @Column({ type: 'integer' })
   order!: number
 
+  @Column({ default: true, name: 'in_summary', type: 'boolean' })
+  inSummary!: boolean
+
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date
 

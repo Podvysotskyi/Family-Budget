@@ -21,6 +21,7 @@ export class HouseholdsRepository {
 
       await manager.save(BudgetCategoryEntity, defaultBudgetCategories.map((category, index) => manager.create(BudgetCategoryEntity, {
         householdId: household.id,
+        inSummary: category.inSummary,
         name: category.name,
         type: category.type,
         order: index + 1

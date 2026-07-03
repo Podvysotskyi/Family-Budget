@@ -158,6 +158,10 @@ async function deleteBudgetCategory() {
 async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' | 'down') {
   budgetCategoryError.value = null
 
+  if (isFrontendOnlyBudgetCategory(category)) {
+    return
+  }
+
   if (!householdId.value) {
     budgetCategoryError.value = 'Household is required.'
     return
@@ -172,6 +176,16 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
   } finally {
     reorderingBudgetCategoryId.value = null
   }
+}
+
+function isFrontendOnlyBudgetCategory(category: BudgetCategory) {
+  return category.id.startsWith('frontend-default-')
+}
+
+function isLastPersistedBudgetCategory(category: BudgetCategory) {
+  const persistedCategories = budgetCategories.value.filter(item => !isFrontendOnlyBudgetCategory(item))
+
+  return persistedCategories[persistedCategories.length - 1]?.id === category.id
 }
 </script>
 
@@ -299,7 +313,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 color="neutral"
                 variant="ghost"
                 aria-label="Move budget category up"
-                :disabled="category.order === 1 || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
+                :disabled="isFrontendOnlyBudgetCategory(category) || category.order === 1 || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
                 @click="reorderBudgetCategory(category, 'up')"
               />
               <UButton
@@ -307,7 +321,7 @@ async function reorderBudgetCategory(category: BudgetCategory, direction: 'up' |
                 color="neutral"
                 variant="ghost"
                 aria-label="Move budget category down"
-                :disabled="category.order === budgetCategories.length || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
+                :disabled="isFrontendOnlyBudgetCategory(category) || isLastPersistedBudgetCategory(category) || category.order === budgetCategories.length || reorderingBudgetCategoryId === category.id || deletingBudgetCategoryId === category.id"
                 @click="reorderBudgetCategory(category, 'down')"
               />
               <UButton

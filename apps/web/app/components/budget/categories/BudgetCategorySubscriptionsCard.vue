@@ -9,6 +9,7 @@ defineOptions({
 const props = defineProps<{
   category: BudgetCategory
   isLoadingSubscriptions?: boolean
+  isSummaryUpdating?: boolean
   payingSubscriptionKey?: string | null
   subscriptions?: BudgetSubscriptionPayment[]
   subscriptionsError?: string | null
@@ -16,6 +17,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   markSubscriptionPaid: [subscription: BudgetSubscriptionPayment]
   markSubscriptionUnpaid: [subscription: BudgetSubscriptionPayment]
+  updateSummaryInclusion: [includeInSummary: boolean]
 }>()
 
 const subscriptions = computed(() => props.subscriptions || [])
@@ -62,34 +64,36 @@ function setSubscriptionPaid(subscription: BudgetSubscriptionPayment, value: boo
 
 <template>
   <div class="mb-4 break-inside-avoid">
-    <UCard :ui="{ header: 'p-5 sm:px-5', body: 'p-0 sm:p-0' }">
+    <UCard :ui="{ header: 'p-5 sm:px-5', body: 'p-0 sm:p-0', footer: 'p-4 sm:px-5' }">
       <template #header>
         <div class="flex items-start justify-between gap-3">
           <h3 class="truncate text-sm font-semibold text-highlighted">
             {{ category.name }}
           </h3>
-          <div class="flex shrink-0 items-center gap-1 text-sm font-semibold">
-            <span
-              v-if="areSubscriptionsFullyPaid"
-              class="text-success"
-            >
-              {{ formatCurrency(subscriptionsPaidTotal) }}
-            </span>
-            <template v-else-if="hasSubscriptionPayments">
-              <span class="text-success">
+          <div class="flex shrink-0 items-center gap-3">
+            <div class="flex items-center gap-1 text-sm font-semibold">
+              <span
+                v-if="areSubscriptionsFullyPaid"
+                class="text-success"
+              >
                 {{ formatCurrency(subscriptionsPaidTotal) }}
               </span>
-              <span class="text-muted">/</span>
-              <span class="text-error">
+              <template v-else-if="hasSubscriptionPayments">
+                <span class="text-success">
+                  {{ formatCurrency(subscriptionsPaidTotal) }}
+                </span>
+                <span class="text-muted">/</span>
+                <span class="text-error">
+                  {{ formatCurrency(subscriptionsTotal) }}
+                </span>
+              </template>
+              <span
+                v-else
+                class="text-error"
+              >
                 {{ formatCurrency(subscriptionsTotal) }}
               </span>
-            </template>
-            <span
-              v-else
-              class="text-error"
-            >
-              {{ formatCurrency(subscriptionsTotal) }}
-            </span>
+            </div>
           </div>
         </div>
       </template>
@@ -150,6 +154,20 @@ function setSubscriptionPaid(subscription: BudgetSubscriptionPayment, value: boo
           No subscriptions for this period.
         </p>
       </div>
+
+      <template
+        v-if="category.summaryInclusionEditable"
+        #footer
+      >
+        <div class="flex items-center justify-end">
+          <USwitch
+            :model-value="category.includeInSummary"
+            label="Include in summary"
+            :disabled="isSummaryUpdating"
+            @update:model-value="emit('updateSummaryInclusion', $event)"
+          />
+        </div>
+      </template>
     </UCard>
   </div>
 </template>

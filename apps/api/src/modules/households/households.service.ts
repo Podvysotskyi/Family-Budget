@@ -265,6 +265,62 @@ export class HouseholdService {
     }
   }
 
+  async listBudgetCreditCardsForCurrentUser(currentUserId: string, budgetUserId: string, dateRange: DateRangeSelection) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    const members = await this.usersRepository.listByHouseholdId(household.householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
+    const creditCards = budgetUserId === householdBudgetUserId
+      ? await this.creditCardsRepository.listByHouseholdId(household.householdId)
+      : onlyMember
+        ? (await this.creditCardsRepository.listByHouseholdId(household.householdId))
+            .filter(creditCard => !creditCard.userId || creditCard.userId === budgetUserId)
+        : await this.creditCardsRepository.listByUserId((await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)).userId)
+
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+    } else if (onlyMember) {
+      await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+    }
+
+    return {
+      creditCards: creditCards
+        .flatMap(creditCard => toBudgetCreditCards(creditCard, dateRange.fromDate, dateRange.toDate))
+        .sort(sortBudgetItems)
+    }
+  }
+
+  async listBudgetGoalsForCurrentUser(currentUserId: string, budgetUserId: string, dateRange: DateRangeSelection) {
+    const household = await this.usersRepository.findHouseholdByUserId(currentUserId)
+
+    if (!household) {
+      throw new NotFoundException('Household not found')
+    }
+
+    const members = await this.usersRepository.listByHouseholdId(household.householdId)
+    const onlyMember = members.length === 1 ? members[0]! : null
+
+    if (budgetUserId === householdBudgetUserId) {
+      await this.requireHouseholdUser(household.householdId, currentUserId)
+    } else {
+      await this.requireBudgetUser(household.householdId, currentUserId, budgetUserId)
+    }
+
+    const goals = await this.goalsRepository.listByHouseholdId(household.householdId)
+
+    return {
+      goals: goals
+        .filter(goal => goal.includeInBudget)
+        .filter(goal => budgetUserId === householdBudgetUserId || goal.userId === budgetUserId || (onlyMember && !goal.userId))
+        .flatMap(goal => toBudgetGoals(goal, dateRange.fromDate, dateRange.toDate))
+        .sort(sortBudgetItems)
+    }
+  }
+
   async createSubscriptionTransactionForCurrentUser(
     currentUserId: string,
     budgetUserId: string,
@@ -1255,6 +1311,7 @@ function toBudgetCategory(category: BudgetCategoryEntity) {
     name: category.name,
     type: category.type,
     order: category.order,
+    includeInSummary: category.inSummary,
     createdAt: category.createdAt,
     updatedAt: category.updatedAt
   }
@@ -1666,10 +1723,60 @@ function toBudgetSubscriptions(subscription: SubscriptionEntity, budgetStartDate
   }))
 }
 
-function sortBudgetSubscriptions(first: ReturnType<typeof toBudgetSubscriptions>[number], second: ReturnType<typeof toBudgetSubscriptions>[number]) {
+function toBudgetCreditCards(creditCard: CreditCardEntity, budgetStartDate: string, budgetEndDate: string) {
+  return getMonthlyOccurrenceDates(creditCard.dueDate, budgetStartDate, budgetEndDate)
+    .filter(occurrenceDate => occurrenceDate >= creditCard.startDate)
+    .filter(occurrenceDate => !creditCard.endDate || occurrenceDate <= creditCard.endDate)
+    .map(occurrenceDate => ({
+      id: creditCard.id,
+      name: creditCard.name,
+      userId: creditCard.userId,
+      occurrenceDate,
+      amount: getCreditCardBalanceForDate(creditCard, occurrenceDate) || 0,
+      limit: getCreditCardLimitForDate(creditCard, occurrenceDate)
+    }))
+}
+
+function toBudgetGoals(goal: GoalEntity, budgetStartDate: string, budgetEndDate: string) {
+  const target = getCurrentGoalTarget(goal)
+
+  if (!target) {
+    return []
+  }
+
+  const occurrenceStartDate = goal.startDate > budgetStartDate ? goal.startDate : budgetStartDate
+  const occurrenceEndDate = goal.endDate && goal.endDate < budgetEndDate ? goal.endDate : budgetEndDate
+
+  if (occurrenceStartDate > occurrenceEndDate) {
+    return []
+  }
+
+  return getGoalOccurrenceDates(goal.startDate, target.type, occurrenceStartDate, occurrenceEndDate).map(occurrenceDate => ({
+    id: goal.id,
+    name: goal.name,
+    userId: goal.userId,
+    occurrenceDate,
+    targetType: target.type,
+    amount: target.amount
+  }))
+}
+
+function getCurrentGoalTarget(goal: GoalEntity) {
+  return [...(goal.targets || [])]
+    .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))[0] || null
+}
+
+function sortBudgetItems(
+  first: { occurrenceDate: string, name: string, id: string },
+  second: { occurrenceDate: string, name: string, id: string }
+) {
   return first.occurrenceDate.localeCompare(second.occurrenceDate)
     || first.name.localeCompare(second.name)
     || first.id.localeCompare(second.id)
+}
+
+function sortBudgetSubscriptions(first: ReturnType<typeof toBudgetSubscriptions>[number], second: ReturnType<typeof toBudgetSubscriptions>[number]) {
+  return sortBudgetItems(first, second)
 }
 
 function getSubscriptionOccurrenceDate(subscription: SubscriptionEntity, budgetStartDate: string, budgetEndDate: string) {
@@ -1729,6 +1836,78 @@ function getSubscriptionOccurrenceDatesFromSchedule(subscription: SubscriptionEn
   return dates
 }
 
+function getMonthlyOccurrenceDates(seedDate: string, rangeStartDate: string, rangeEndDate: string) {
+  const dates: string[] = []
+  let candidateDate = seedDate
+
+  while (candidateDate < rangeStartDate) {
+    candidateDate = addMonthsToDateKey(candidateDate, 1)
+  }
+
+  while (candidateDate <= rangeEndDate) {
+    dates.push(candidateDate)
+    candidateDate = addMonthsToDateKey(candidateDate, 1)
+  }
+
+  return dates
+}
+
+function getGoalOccurrenceDates(seedDate: string, targetType: GoalTargetType, rangeStartDate: string, rangeEndDate: string) {
+  if (targetType === GoalTargetType.Weekly) {
+    return getWeeklyOccurrenceDates(seedDate, rangeStartDate, rangeEndDate)
+  }
+
+  if (targetType === GoalTargetType.Monthly) {
+    return getMonthlyGoalOccurrenceDates(seedDate, rangeStartDate, rangeEndDate)
+  }
+
+  return [rangeStartDate]
+}
+
+function getWeeklyOccurrenceDates(seedDate: string, rangeStartDate: string, rangeEndDate: string) {
+  const dates: string[] = []
+  let candidateDate = seedDate
+
+  while (candidateDate < rangeStartDate) {
+    candidateDate = addDaysToDateKey(candidateDate, 7)
+  }
+
+  while (candidateDate <= rangeEndDate) {
+    dates.push(candidateDate)
+    candidateDate = addDaysToDateKey(candidateDate, 7)
+  }
+
+  return dates
+}
+
+function getMonthlyGoalOccurrenceDates(seedDate: string, rangeStartDate: string, rangeEndDate: string) {
+  const dates: string[] = []
+  const seedParts = parseDateParts(seedDate)
+  let monthOffset = 0
+  let candidateDate = getMonthlyAnchoredDate(seedParts.year, seedParts.month, seedParts.day, monthOffset)
+
+  while (candidateDate < rangeStartDate) {
+    monthOffset += 1
+    candidateDate = getMonthlyAnchoredDate(seedParts.year, seedParts.month, seedParts.day, monthOffset)
+  }
+
+  while (candidateDate <= rangeEndDate) {
+    dates.push(candidateDate)
+    monthOffset += 1
+    candidateDate = getMonthlyAnchoredDate(seedParts.year, seedParts.month, seedParts.day, monthOffset)
+  }
+
+  return dates
+}
+
+function getMonthlyAnchoredDate(seedYear: number, seedMonth: number, seedDay: number, monthOffset: number) {
+  const monthIndex = seedMonth - 1 + monthOffset
+  const year = seedYear + Math.floor(monthIndex / 12)
+  const month = (monthIndex % 12) + 1
+
+  return formatUtcDate(getClampedUtcDate(year, month, seedDay))
+}
+
 function getExistingSubscriptionDatesByPeriod(subscription: SubscriptionEntity) {
   const datesByPeriod = new Map<string, string>()
 
@@ -1764,6 +1943,13 @@ function getNextSubscriptionOccurrenceDate(type: SubscriptionType, date: string)
 function addMonthsToDateKey(date: string, monthCount: number) {
   const parts = parseDateParts(date)
   const nextDate = new Date(Date.UTC(parts.year, parts.month - 1 + monthCount, parts.day))
+
+  return formatUtcDate(nextDate)
+}
+
+function addDaysToDateKey(date: string, dayCount: number) {
+  const parts = parseDateParts(date)
+  const nextDate = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + dayCount))
 
   return formatUtcDate(nextDate)
 }

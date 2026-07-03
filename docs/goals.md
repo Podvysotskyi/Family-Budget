@@ -47,6 +47,8 @@ Target type can be:
 
 When a user changes a goal target, the API writes a target record with the current date. If the target is changed multiple times for the same goal on the same date, the existing row for that date is updated instead of creating another row.
 
+When the target changes, target records dated after the current date are deleted in the same transaction. This keeps future target history from overriding the newly selected target.
+
 When the app needs the current target, it uses the latest target record by `date`.
 
 ### `goal_transactions`
@@ -87,19 +89,23 @@ The API validates:
 When a goal is updated:
 
 1. Goal metadata is updated on the `goals` row.
-2. The submitted target is compared with the latest target record.
+2. The submitted target is compared with the effective target record as of the current date.
 3. If the target amount or type changed, a `goal_targets` row is upserted for the current date.
-4. The updated goal is returned with its user assignment and target history.
+4. Future target records after the current date are deleted when the target changes.
+5. Future target records after `end_date` are deleted when an end date is set.
+6. The updated goal is returned with its user assignment and target history.
 
 Updating a target does not overwrite older target records with different dates. This keeps target history available while preventing duplicate rows for the same goal and effective date.
 
-If only metadata changes and the target is unchanged, no new target record is created unless the latest target record is already for the current date. Same-day saves update the current-date row.
+If only metadata changes and the target is unchanged, no new target record is created unless the effective target record is already for the current date. Same-day saves update the current-date row.
 
 ## Closing Goals
 
 Deleting a goal from the normal UI flow does not delete the database row.
 
 The `DELETE /households/:id/goals/:goalId` endpoint closes the goal by setting `goals.end_date` to the current date. This preserves goal metadata, target history, and transactions.
+
+Closing a goal deletes target records dated after the close date in the same transaction.
 
 The current date comes from `SCHEDULING_TIMEZONE`, defaulting to `America/Chicago`.
 
@@ -158,6 +164,20 @@ The close confirmation tells the user that the action sets the goal end date and
 The Nuxt page owns household loading and list refresh. The page header owns the create modal, list items own row edit/close modals, and successful modal actions emit a refresh event back to the page.
 
 The goals Pinia store keeps the active household goal list, exposes read-only getters, and does not implicitly reload the list after create, update, or close actions.
+
+## Budget Views
+
+Goals appear in the Investment / Savings budget category when `include_in_budget` is true and the goal is active in the selected budget period. The category uses the current target amount.
+
+Goal budget items are generated from `start_date`, which acts as the recurring due-date anchor:
+
+- `weekly` targets appear every 7 days in the selected budget period.
+- `monthly` targets appear once per month on the anchored day, clamped to the last day for shorter months.
+- `total` targets appear once in an active selected budget period.
+
+Goals do not currently support a yearly target type.
+
+Investment / Savings has `budget_categories.in_summary=false` by default. The category summary switch can include it for the current frontend session, but it does not update the API or database.
 
 ## Timezone
 

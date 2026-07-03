@@ -206,6 +206,12 @@ The cancel form asks for:
 
 Canceled cards show a `Canceled` label. Canceled cards do not show edit or cancel actions.
 
+## Budget Views
+
+Budget credit-card items show due occurrences in the selected budget period with the balance effective on that occurrence date.
+
+The Credit Cards category has `budget_categories.in_summary=false` by default. The category summary switch can include it for the current frontend session, but it does not update the API or database.
+
 ## Timezone
 
 Current-date behavior uses `SCHEDULING_TIMEZONE`, defaulting to `America/Chicago`.

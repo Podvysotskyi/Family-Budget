@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment } from '~/types/budgets'
+import type { BudgetCategory } from '~/types/budget-categories'
+import type { BudgetCreditCard, BudgetGoal, BudgetPeriod, BudgetSubscription, BudgetSubscriptionPayment } from '~/types/budgets'
 import AddIncomeModal from '~/components/budget/AddIncomeModal.vue'
 import BudgetCalendar from '~/components/budget/BudgetCalendar.vue'
 import BudgetCategoriesPanel from '~/components/budget/BudgetCategoriesPanel.vue'
@@ -34,15 +35,22 @@ const selectedMonthLabel = computed(() => {
   })
 })
 const selectedBudgetId = ref<string | null>(null)
+const budgetCategoriesStore = useBudgetCategoriesStore()
 const budgetStore = useBudgetsStore()
 const dashboardStore = useDashboardStore()
 const incomeTypesStore = useIncomeTypesStore()
 await dashboardStore.fetchDashboard()
+await budgetCategoriesStore.fetchCategories(dashboardStore.householdId)
 await budgetStore.fetchMonthBudget(budgetUserId.value, selectedMonth.value, selectedYear.value)
 type AddIncomePayload = {
   amount: number
   incomeTypeId?: string
   newIncomeTypeText?: string
+}
+type BudgetSummaryCategoryType = NonNullable<BudgetCategory['type']>
+type BudgetSummaryCategoryTotal = {
+  type: BudgetSummaryCategoryType
+  total: number
 }
 
 const householdId = computed(() => dashboardStore.householdId)
@@ -78,20 +86,43 @@ const visibleCalendarEndDate = computed(() => {
 })
 const incomeEntries = computed(() => selectedBudget.value ? budgetStore.getIncomeEntries(selectedBudget.value.id) : [])
 const budgetSubscriptions = computed(() => budgetStore.getUserSubscriptions(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
+const budgetCreditCards = computed(() => budgetStore.getUserCreditCards(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
+const budgetGoals = computed(() => budgetStore.getUserGoals(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
 const budgetSubscriptionTransactions = computed(() => budgetStore.getUserSubscriptionTransactions(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value))
+const budgetCategories = computed(() => householdId.value ? budgetCategoriesStore.getCategories(householdId.value) : [])
 const budgetSubscriptionsError = computed(() => {
   return subscriptionActionError.value
     || budgetStore.getUserSubscriptionsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
     || budgetStore.getUserSubscriptionTransactionsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
 })
+const budgetCreditCardsError = computed(() => {
+  return budgetStore.getUserCreditCardsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+})
+const budgetGoalsError = computed(() => {
+  return budgetStore.getUserGoalsError(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+})
 const isLoadingBudgetSubscriptions = computed(() => {
   return budgetStore.isUserSubscriptionsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
     || budgetStore.isUserSubscriptionTransactionsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || !budgetStore.hasUserSubscriptionsLoaded(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || !budgetStore.hasUserSubscriptionTransactionsLoaded(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+})
+const isLoadingBudgetCreditCards = computed(() => {
+  return budgetStore.isUserCreditCardsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || !budgetStore.hasUserCreditCardsLoaded(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+})
+const isLoadingBudgetGoals = computed(() => {
+  return budgetStore.isUserGoalsLoading(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
+    || !budgetStore.hasUserGoalsLoaded(budgetUserId.value, visibleCalendarStartDate.value, visibleCalendarEndDate.value)
 })
 const isLoadingSummary = computed(() => {
   return budgetStore.isMonthBudgetLoading(budgetUserId.value, selectedMonth.value, selectedYear.value)
     || (selectedBudget.value ? budgetStore.isIncomeEntriesLoading(selectedBudget.value.id) : true)
+    || (selectedBudget.value ? !budgetStore.hasIncomeEntriesLoaded(selectedBudget.value.id) : true)
     || isLoadingBudgetSubscriptions.value
+    || isLoadingBudgetCreditCards.value
+    || isLoadingBudgetGoals.value
+    || (householdId.value ? budgetCategoriesStore.isLoading(householdId.value) : true)
 })
 const monthlyIncomeTotal = computed(() => {
   return incomeEntries.value.reduce((total, income) => total + income.amount, 0)
@@ -106,6 +137,24 @@ const selectedPeriodSubscriptions = computed(() => {
 
   return budgetSubscriptions.value.filter((subscription) => {
     return subscription.occurrenceDate >= selectedBudget.value!.startDate && subscription.occurrenceDate <= selectedBudget.value!.endDate
+  })
+})
+const selectedPeriodCreditCards = computed<BudgetCreditCard[]>(() => {
+  if (!selectedBudget.value) {
+    return []
+  }
+
+  return budgetCreditCards.value.filter((creditCard) => {
+    return creditCard.occurrenceDate >= selectedBudget.value!.startDate && creditCard.occurrenceDate <= selectedBudget.value!.endDate
+  })
+})
+const selectedPeriodGoals = computed<BudgetGoal[]>(() => {
+  if (!selectedBudget.value) {
+    return []
+  }
+
+  return budgetGoals.value.filter((goal) => {
+    return goal.occurrenceDate >= selectedBudget.value!.startDate && goal.occurrenceDate <= selectedBudget.value!.endDate
   })
 })
 const budgetSubscriptionPayments = computed<BudgetSubscriptionPayment[]>(() => {
@@ -126,8 +175,34 @@ const subscriptionTotalsByDate = computed(() => {
     return totals
   }, {})
 })
-const totalExpenses = computed(() => {
+const creditCardTotal = computed(() => {
+  return selectedPeriodCreditCards.value.reduce((total, creditCard) => total + creditCard.amount, 0)
+})
+const goalTotal = computed(() => {
+  return selectedPeriodGoals.value.reduce((total, goal) => total + goal.amount, 0)
+})
+const subscriptionTotal = computed(() => {
   return budgetSubscriptionPayments.value.reduce((total, subscription) => total + subscription.amount, 0)
+})
+const totalExpenses = computed(() => {
+  const summaryCategoryTotals: BudgetSummaryCategoryTotal[] = [
+    {
+      type: 'subscriptions',
+      total: subscriptionTotal.value
+    },
+    {
+      type: 'credit_cards',
+      total: creditCardTotal.value
+    },
+    {
+      type: 'goals',
+      total: goalTotal.value
+    }
+  ]
+
+  return summaryCategoryTotals.reduce((total, item) => {
+    return isCategoryIncludedInSummary(item.type) ? total + item.total : total
+  }, 0)
 })
 const summaryTitle = computed(() => {
   return selectedBudget.value?.type === 'week' ? 'Weekly summary' : 'Monthly summary'
@@ -190,37 +265,43 @@ watch([budgetUserId, selectedMonth, selectedYear], async ([userId, month, year])
 })
 
 if (import.meta.client) {
-  watch(() => selectedBudget.value?.id, async (budgetId) => {
-    if (budgetId) {
-      subscriptionActionError.value = ''
-      await budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId)
-    }
-  }, { immediate: true })
-
-  watch([budgetUserId, () => monthlyBudget.value?.id, visibleCalendarStartDate, visibleCalendarEndDate], async ([userId, budgetId, fromDate, toDate]) => {
-    await budgetStore.fetchUserSubscriptions(userId, fromDate, toDate)
-
-    if (budgetId) {
-      await budgetStore.fetchSubscriptionTransactions(userId, budgetId, fromDate, toDate)
-    }
-  }, { immediate: true })
-
-  watch([selectedMonth, selectedYear], () => {
-    const month = String(selectedMonth.value)
-    const year = String(selectedYear.value)
-
-    if (route.query.month === month && route.query.year === year) {
-      return
-    }
-
-    router.replace({
-      query: {
-        ...route.query,
-        month,
-        year
+  onMounted(() => {
+    watch(() => selectedBudget.value?.id, async (budgetId) => {
+      if (budgetId) {
+        subscriptionActionError.value = ''
+        await budgetStore.fetchIncomeEntries(budgetUserId.value, budgetId)
       }
-    })
-  }, { immediate: true })
+    }, { immediate: true })
+
+    watch([budgetUserId, () => monthlyBudget.value?.id, visibleCalendarStartDate, visibleCalendarEndDate], async ([userId, budgetId, fromDate, toDate]) => {
+      await Promise.all([
+        budgetStore.fetchUserSubscriptions(userId, fromDate, toDate),
+        budgetStore.fetchUserCreditCards(userId, fromDate, toDate),
+        budgetStore.fetchUserGoals(userId, fromDate, toDate)
+      ])
+
+      if (budgetId) {
+        await budgetStore.fetchSubscriptionTransactions(userId, budgetId, fromDate, toDate)
+      }
+    }, { immediate: true })
+
+    watch([selectedMonth, selectedYear], () => {
+      const month = String(selectedMonth.value)
+      const year = String(selectedYear.value)
+
+      if (route.query.month === month && route.query.year === year) {
+        return
+      }
+
+      router.replace({
+        query: {
+          ...route.query,
+          month,
+          year
+        }
+      })
+    }, { immediate: true })
+  })
 }
 
 function goToPreviousMonth() {
@@ -484,6 +565,10 @@ function getSubscriptionKey(subscription: Pick<BudgetSubscription, 'id' | 'occur
 function getSubscriptionTransactionKey(transaction: { subscriptionId: string, date: string }) {
   return `${transaction.subscriptionId}:${transaction.date}`
 }
+
+function isCategoryIncludedInSummary(type: NonNullable<BudgetCategory['type']>) {
+  return budgetCategories.value.find(category => category.type === type)?.includeInSummary === true
+}
 </script>
 
 <template>
@@ -598,8 +683,14 @@ function getSubscriptionTransactionKey(transaction: { subscriptionId: string, da
       <BudgetCategoriesPanel
         v-if="householdId"
         :household-id="householdId"
+        :credit-cards="selectedPeriodCreditCards"
+        :credit-cards-error="budgetCreditCardsError"
+        :goals="selectedPeriodGoals"
+        :goals-error="budgetGoalsError"
         :subscriptions="budgetSubscriptionPayments"
         :subscriptions-error="budgetSubscriptionsError"
+        :is-loading-credit-cards="isLoadingBudgetCreditCards"
+        :is-loading-goals="isLoadingBudgetGoals"
         :is-loading-subscriptions="isLoadingBudgetSubscriptions"
         :paying-subscription-key="payingSubscriptionKey"
         @mark-subscription-paid="markSubscriptionPaid"

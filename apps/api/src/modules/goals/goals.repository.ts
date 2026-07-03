@@ -82,7 +82,12 @@ export class GoalsRepository {
       await manager.save(GoalEntity, goal)
 
       if (shouldUpsertGoalTarget(goal.targets || [], targetInput)) {
+        await this.deleteGoalTargetsAfterDateWithManager(manager, goal.id, targetInput.date)
         await this.upsertGoalTarget(manager, goal.id, targetInput)
+      }
+
+      if (goalInput.endDate) {
+        await this.deleteGoalTargetsAfterDateWithManager(manager, goal.id, goalInput.endDate)
       }
 
       return manager.findOne(GoalEntity, {
@@ -99,21 +104,33 @@ export class GoalsRepository {
   }
 
   async end(householdId: string, goalId: string, endDate: string) {
-    const goal = await this.goalsRepository.findOne({
-      where: {
-        id: goalId,
-        householdId
+    return this.goalsRepository.manager.transaction(async (manager) => {
+      const goal = await manager.findOne(GoalEntity, {
+        where: {
+          id: goalId,
+          householdId
+        }
+      })
+
+      if (!goal) {
+        return null
       }
+
+      goal.endDate = endDate
+      await manager.save(GoalEntity, goal)
+      await this.deleteGoalTargetsAfterDateWithManager(manager, goal.id, endDate)
+
+      return manager.findOne(GoalEntity, {
+        where: {
+          id: goal.id,
+          householdId
+        },
+        relations: {
+          targets: true,
+          user: true
+        }
+      })
     })
-
-    if (!goal) {
-      return null
-    }
-
-    goal.endDate = endDate
-    await this.goalsRepository.save(goal)
-
-    return goal
   }
 
   async delete(householdId: string, goalId: string) {
@@ -169,14 +186,30 @@ export class GoalsRepository {
         }
       )
   }
+
+  private async deleteGoalTargetsAfterDateWithManager(manager: EntityManager, goalId: string, date: string) {
+    await manager
+      .getRepository(GoalTargetEntity)
+      .createQueryBuilder()
+      .delete()
+      .from(GoalTargetEntity)
+      .where('goal_id = :goalId', { goalId })
+      .andWhere('date > :date', { date })
+      .execute()
+  }
 }
 
 function shouldUpsertGoalTarget(targets: GoalTargetEntity[], targetInput: SaveGoalTargetInput) {
-  const currentTarget = [...targets]
-    .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))[0]
+  const currentTarget = getEffectiveGoalTarget(targets, targetInput.date)
 
   return !currentTarget
     || currentTarget.amount !== targetInput.amount
     || currentTarget.type !== targetInput.type
     || currentTarget.date === targetInput.date
+}
+
+function getEffectiveGoalTarget(targets: GoalTargetEntity[], date: string) {
+  return [...targets]
+    .filter(target => target.date <= date)
+    .sort((first, second) => second.date.localeCompare(first.date) || second.id.localeCompare(first.id))[0] || null
 }

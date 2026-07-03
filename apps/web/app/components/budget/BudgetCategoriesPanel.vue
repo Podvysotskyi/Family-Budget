@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { BudgetCategory } from '~/types/budget-categories'
-import type { BudgetSubscriptionPayment } from '~/types/budgets'
+import type { BudgetCreditCard, BudgetGoal, BudgetSubscriptionPayment } from '~/types/budgets'
 import BudgetCategoryBillsCard from '~/components/budget/categories/BudgetCategoryBillsCard.vue'
 import BudgetCategoryCreditCardsCard from '~/components/budget/categories/BudgetCategoryCreditCardsCard.vue'
 import BudgetCategoryCustomCard from '~/components/budget/categories/BudgetCategoryCustomCard.vue'
@@ -13,7 +13,13 @@ defineOptions({
 })
 
 const props = defineProps<{
+  creditCards?: BudgetCreditCard[]
+  creditCardsError?: string | null
+  goals?: BudgetGoal[]
+  goalsError?: string | null
   householdId: string
+  isLoadingCreditCards?: boolean
+  isLoadingGoals?: boolean
   isLoadingSubscriptions?: boolean
   payingSubscriptionKey?: string | null
   subscriptions?: BudgetSubscriptionPayment[]
@@ -27,6 +33,7 @@ const emit = defineEmits<{
 const budgetCategoriesStore = useBudgetCategoriesStore()
 await budgetCategoriesStore.fetchCategories(props.householdId)
 
+const summaryCategoryPendingId = ref<string | null>(null)
 const error = computed(() => budgetCategoriesStore.getError(props.householdId))
 const isLoadingBudgetCategories = computed(() => budgetCategoriesStore.isLoading(props.householdId))
 const budgetCategories = computed(() => budgetCategoriesStore.getCategories(props.householdId))
@@ -56,6 +63,20 @@ function markSubscriptionPaid(subscription: BudgetSubscriptionPayment) {
 
 function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
   emit('markSubscriptionUnpaid', subscription)
+}
+
+async function updateCategorySummaryInclusion(category: BudgetCategory, includeInSummary: boolean) {
+  if (summaryCategoryPendingId.value) {
+    return
+  }
+
+  summaryCategoryPendingId.value = category.id
+
+  try {
+    await budgetCategoriesStore.updateCategorySummaryInclusion(props.householdId, category.id, includeInSummary)
+  } finally {
+    summaryCategoryPendingId.value = null
+  }
 }
 </script>
 
@@ -111,10 +132,18 @@ function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
             v-for="category in budgetCategories"
             :key="category.id"
             :category="category"
+            :credit-cards="creditCards"
+            :credit-cards-error="creditCardsError"
+            :goals="goals"
+            :goals-error="goalsError"
+            :is-loading-credit-cards="isLoadingCreditCards"
+            :is-loading-goals="isLoadingGoals"
             :subscriptions="subscriptions"
             :subscriptions-error="subscriptionsError"
+            :is-summary-updating="summaryCategoryPendingId === category.id"
             :is-loading-subscriptions="isLoadingSubscriptions"
             :paying-subscription-key="payingSubscriptionKey"
+            @update-summary-inclusion="(value: boolean) => updateCategorySummaryInclusion(category, value)"
             @mark-subscription-paid="markSubscriptionPaid"
             @mark-subscription-unpaid="markSubscriptionUnpaid"
           />
@@ -127,10 +156,18 @@ function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
               v-for="category in leftBudgetCategories"
               :key="category.id"
               :category="category"
+              :credit-cards="creditCards"
+              :credit-cards-error="creditCardsError"
+              :goals="goals"
+              :goals-error="goalsError"
+              :is-loading-credit-cards="isLoadingCreditCards"
+              :is-loading-goals="isLoadingGoals"
               :subscriptions="subscriptions"
               :subscriptions-error="subscriptionsError"
+              :is-summary-updating="summaryCategoryPendingId === category.id"
               :is-loading-subscriptions="isLoadingSubscriptions"
               :paying-subscription-key="payingSubscriptionKey"
+              @update-summary-inclusion="(value: boolean) => updateCategorySummaryInclusion(category, value)"
               @mark-subscription-paid="markSubscriptionPaid"
               @mark-subscription-unpaid="markSubscriptionUnpaid"
             />
@@ -142,10 +179,18 @@ function markSubscriptionUnpaid(subscription: BudgetSubscriptionPayment) {
               v-for="category in rightBudgetCategories"
               :key="category.id"
               :category="category"
+              :credit-cards="creditCards"
+              :credit-cards-error="creditCardsError"
+              :goals="goals"
+              :goals-error="goalsError"
+              :is-loading-credit-cards="isLoadingCreditCards"
+              :is-loading-goals="isLoadingGoals"
               :subscriptions="subscriptions"
               :subscriptions-error="subscriptionsError"
+              :is-summary-updating="summaryCategoryPendingId === category.id"
               :is-loading-subscriptions="isLoadingSubscriptions"
               :paying-subscription-key="payingSubscriptionKey"
+              @update-summary-inclusion="(value: boolean) => updateCategorySummaryInclusion(category, value)"
               @mark-subscription-paid="markSubscriptionPaid"
               @mark-subscription-unpaid="markSubscriptionUnpaid"
             />
