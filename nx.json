@@ -20,6 +20,18 @@
     },
     "typecheck": {
       "cache": true
+    },
+    "test": {
+      "cache": true
+    },
+    "test:unit": {
+      "cache": true
+    },
+    "test:feature": {
+      "cache": true
+    },
+    "test:coverage": {
+      "cache": true
     }
   },
   "analytics": false

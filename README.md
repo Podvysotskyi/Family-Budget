@@ -81,11 +81,17 @@ Defaults are defined in `.env.example`.
 
 ```bash
 pnpm lint
+pnpm test
+pnpm test:unit
+pnpm test:feature
+pnpm test:coverage
 pnpm typecheck
 pnpm build
 ```
 
-There is no dedicated root test script yet.
+API feature tests require Docker because they apply the production migrations to a
+disposable PostgreSQL database. See `docs/testing.md` for the suite structure and
+test placement guidance.
 
 ## Database Migrations
 
@@ -149,6 +155,7 @@ Keep docs in sync with behavior changes:
 - `docs/credit-cards.md`
 - `docs/goals.md`
 - `docs/subscriptions.md`
+- `docs/testing.md`
 
 `PLAN.md` contains scheduler implementation notes.
 

@@ -21,6 +21,34 @@
       "options": {
         "command": "tsc -p apps/api/tsconfig.app.json --noEmit"
       }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "../../node_modules/.bin/vitest run"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "../../node_modules/.bin/vitest run --project api-unit"
+      }
+    },
+    "test:feature": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "../../node_modules/.bin/vitest run --project api-feature"
+      }
+    },
+    "test:coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "../../node_modules/.bin/vitest run --coverage"
+      }
     }
   }
 }

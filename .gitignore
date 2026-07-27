@@ -5,7 +5,11 @@
 .nitro
 .cache
 .nx
+coverage
 dist
+
+# Local Nuxt setup metadata
+.nuxtrc
 
 # Node dependencies
 node_modules

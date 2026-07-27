@@ -38,6 +38,34 @@
         "cwd": "apps/web",
         "command": "nuxt prepare"
       }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "../../node_modules/.bin/vitest run"
+      }
+    },
+    "test:unit": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "../../node_modules/.bin/vitest run --project web-unit"
+      }
+    },
+    "test:feature": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "../../node_modules/.bin/vitest run --project web-feature"
+      }
+    },
+    "test:coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "../../node_modules/.bin/vitest run --coverage"
+      }
     }
   }
 }
