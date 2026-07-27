@@ -11,6 +11,7 @@ tests.
 - `apps/api/tests/feature`: Nest HTTP tests and PostgreSQL-backed integration tests.
 - `apps/web/test/unit`: fast tests for framework-independent frontend logic.
 - `apps/web/test/nuxt`: Nuxt runtime component and user-flow feature tests.
+- `apps/web/test/e2e`: cross-app Pinia, Nuxt proxy, Nest, and PostgreSQL tests.
 
 Run all suites:
 
@@ -23,6 +24,7 @@ Run only one test level:
 ```bash
 pnpm test:unit
 pnpm test:feature
+pnpm test:e2e
 ```
 
 Generate HTML and terminal coverage reports under `coverage/apps`:
@@ -40,6 +42,16 @@ Database-backed API feature tests use Testcontainers and PostgreSQL 17. Docker m
 be running before `api:test:feature` or the complete test suite is executed. Each
 run starts an isolated database, applies the production TypeORM migrations, and
 removes the container afterward.
+
+API end-to-end feature tests boot the real Nest application against that disposable
+database and exercise authenticated HTTP endpoints with Supertest. They verify both
+the public response and persisted PostgreSQL state without using local development
+data.
+
+Cross-app Nuxt feature tests may also forward the real Pinia store requests through
+the Nuxt session/API proxy to a live Nest test application backed by the disposable
+database. These tests cover the frontend data-access path without requiring an
+external browser.
 
 SQLite is intentionally not used for database-backed feature tests. The production
 schema depends on PostgreSQL native enums, UUIDs, `timestamptz`, numeric semantics,

@@ -60,6 +60,13 @@
         "command": "../../node_modules/.bin/vitest run --project web-feature"
       }
     },
+    "test:e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/web",
+        "command": "../../node_modules/.bin/vitest run --project web-e2e"
+      }
+    },
     "test:coverage": {
       "executor": "nx:run-commands",
       "options": {

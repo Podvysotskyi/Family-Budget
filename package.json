@@ -18,6 +18,7 @@
     "lint": "eslint .",
     "test": "nx run-many -t test -p api web",
     "test:coverage": "nx run-many -t test:coverage -p api web",
+    "test:e2e": "nx test:e2e web",
     "test:feature": "nx run-many -t test:feature -p api web",
     "test:unit": "nx run-many -t test:unit -p api web",
     "typecheck": "nx run-many -t typecheck -p api web"

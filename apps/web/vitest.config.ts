@@ -36,6 +36,22 @@ export default defineConfig({
             }
           }
         }
+      }),
+      await defineVitestProject({
+        test: {
+          name: 'web-e2e',
+          environment: 'nuxt',
+          include: ['test/e2e/**/*.e2e.spec.ts'],
+          globalSetup: ['test/e2e/global-setup.ts'],
+          hookTimeout: 120_000,
+          testTimeout: 30_000,
+          restoreMocks: true,
+          environmentOptions: {
+            nuxt: {
+              domEnvironment: 'happy-dom'
+            }
+          }
+        }
       })
     ]
   }

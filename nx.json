@@ -30,6 +30,9 @@
     "test:feature": {
       "cache": true
     },
+    "test:e2e": {
+      "cache": true
+    },
     "test:coverage": {
       "cache": true
     }

@@ -84,6 +84,7 @@ pnpm lint
 pnpm test
 pnpm test:unit
 pnpm test:feature
+pnpm test:e2e
 pnpm test:coverage
 pnpm typecheck
 pnpm build
