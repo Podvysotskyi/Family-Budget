@@ -1,139 +1,156 @@
-# AGENTS.md
+<laravel-boost-guidelines>
+=== foundation rules ===
 
-## Purpose
+# Laravel Boost Guidelines
 
-This repository is an Nx-managed family budgeting workspace.
+## Foundational Context
 
-- `apps/web`: Nuxt 4 SSR frontend using Nuxt UI, Pinia, and server routes for auth/API proxying
-- `apps/api`: NestJS API using TypeORM, PostgreSQL, Google auth integration, and the recurring budget scheduler
+This application is a Laravel application running on PHP 8.4. Always use the APIs that match the installed major version of each package — do not assume a version.
 
-Keep changes narrow, follow the existing Nuxt/Nest/TypeORM patterns, and avoid adding new tooling unless it solves a concrete problem in this repo.
+Before relying on a package's API, confirm its installed version:
+- PHP packages: run `composer show --direct` to list direct dependencies with versions, or `composer show <vendor/package>` for a single package.
+- JS packages: check `package.json` for the installed versions.
 
-## Workspace Layout
+## Skills Activation
 
-- `apps/web/app`: Nuxt app source
-- `apps/web/app/components`: Vue components grouped by feature
-- `apps/web/app/pages`: Nuxt routes
-- `apps/web/app/stores`: Pinia stores
-- `apps/web/app/types`: frontend TypeScript contracts
-- `apps/web/server`: Nuxt server routes, auth callbacks, session helpers, and API proxy utilities
-- `apps/api/src/modules`: NestJS feature modules
-- `apps/api/src/modules/database`: TypeORM config and migrations
-- `apps/api/src/modules/budget-scheduler`: recurring budget scheduler
-- `docs`: feature behavior and implementation notes that must stay aligned with code
-- `README.md`: local setup and operational commands
-- `PLAN.md`: scheduler implementation notes
+This project has domain-specific skills available in `**/skills/**`. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
 
-## Setup And Run
+## Conventions
 
-Use PNPM only. The workspace is configured with `pnpm-lock.yaml` and `packageManager: pnpm@11.8.0`.
+- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
+- Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
+- Check for existing components to reuse before writing a new one.
 
-```bash
-pnpm install
-cp .env.example .env
-docker compose up -d
-```
+## Verification Scripts
 
-Primary development commands:
+- Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
 
-```bash
-pnpm dev
-pnpm dev:web
-pnpm dev:api
-```
+## Application Structure & Architecture
 
-Primary verification commands:
+- Stick to existing directory structure; don't create new base folders without approval.
+- Do not change the application's dependencies without approval.
 
-```bash
-pnpm lint
-pnpm typecheck
-pnpm build
-```
+## Frontend Bundling
 
-Useful migration commands:
+- If a frontend change doesn't show in the UI or you get a "Unable to locate file in Vite manifest" error, run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
 
-```bash
-pnpm migration:show
-pnpm migration:run
-pnpm migration:revert
-pnpm migration:generate -- apps/api/src/modules/database/migrations/NameOfMigration
-pnpm migration:create apps/api/src/modules/database/migrations/NameOfMigration
-pnpm migration:check
-```
+## Documentation Files
 
-## Runtime Defaults
+- You must only create documentation files if explicitly requested by the user.
 
-- Web app: `http://127.0.0.1:3000`
-- API: `http://127.0.0.1:3001`
-- PostgreSQL: `localhost:5432`
-- Scheduling: runs inside the API process
+=== boost rules ===
 
-For local Google OAuth, use this callback:
+# Laravel Boost
 
-```txt
-http://127.0.0.1:3000/auth/google/callback
-```
+## Project Rules
 
-Important environment variables are documented in `.env.example`.
+- This project contains committed, area-grouped rules in `.ai/rules` when that directory exists, including path-scoped framework guidelines under `.ai/rules/boost`. Before you enter plan mode or create/edit any file, you MUST first: open @.ai/rules/index.md (it maps file globs to rule files), read every rule file whose globs cover the path(s) in scope, and run `grep -rin 'keyword' .ai/rules` to catch what a path match alone misses. Do not write code until you have read and are following every matching rule. If `.ai/rules` does not exist, continue without it.
 
-## Repo-Specific Guidance
+## Artisan
 
-### General
+- Run Artisan commands directly via the command line (e.g., `php artisan route:list`). Use `php artisan list` to discover available commands and `php artisan [command] --help` to check parameters.
+- Inspect routes with `php artisan route:list`. Filter with: `--method=GET`, `--name=users`, `--path=api`, `--except-vendor`, `--only-vendor`.
+- Read configuration values using dot notation: `php artisan config:show app.name`, `php artisan config:show database.default`. Or read config files directly from the `config/` directory.
 
-- Prefer existing Nx, Nuxt, NestJS, Pinia, Nuxt UI, and TypeORM patterns over new abstractions.
-- Keep frontend work inside the existing Nuxt app structure unless the change clearly belongs in `apps/web/server`.
-- Keep backend work inside the appropriate NestJS module unless a shared concern clearly warrants extraction.
-- Keep API contracts, frontend types, stores, and docs aligned when changing feature behavior.
+## Tinker
 
-### Documentation
+- Execute PHP in app context for debugging and testing code. Do not create models without user approval, prefer tests with factories instead. Prefer existing Artisan commands over custom tinker code.
+- Always use single quotes to prevent shell expansion: `php artisan tinker --execute 'Your::code();'`
+  - Double quotes for PHP strings inside: `php artisan tinker --execute 'User::where("active", true)->count();'`
 
-- Keep docs up to date with the current implementation.
-- When changing feature behavior, API endpoints, data models, ownership rules, UI flows, scheduler behavior, date handling, or cancellation semantics, update the matching document in `docs/` in the same change.
-- If a relevant doc does not exist, create a focused feature doc under `docs/`.
-- Treat stale docs as part of the bug: if code and docs disagree, either update the docs or explicitly call out why the docs are intentionally unchanged.
-- For credit-card changes, update `docs/credit-cards.md` whenever endpoints, response shape, store flow, modal/page behavior, date handling, or cancellation/balance semantics change.
-- For subscription changes, update `docs/subscriptions.md` when due-date, amount-history, transaction, autopay, page, or API behavior changes.
-- For goal changes, update `docs/goals.md` when target, transaction, closing/deletion, page, or API behavior changes.
+=== php rules ===
 
-### Database And Migrations
+# PHP
 
-- Use TypeORM migrations for schema changes.
-- Keep migration changes scoped to the feature being implemented.
-- Do not rely on `synchronize` behavior for schema changes.
-- Treat idempotency and conflict-safe inserts as first-class concerns for recurring or scheduled writes.
-- Keep entity, migration, repository, DTO, frontend type, and docs changes synchronized.
+- Always use curly braces for control structures, even for single-line bodies.
+- Use PHP 8 constructor property promotion: `public function __construct(public GitHub $github) { }`. Do not leave empty zero-parameter `__construct()` methods unless the constructor is private.
+- Use explicit return type declarations and type hints for all method parameters: `function isAccessible(User $user, ?string $path = null): bool`
+- Use TitleCase for Enum keys: `FavoritePerson`, `BestLake`, `Monthly`.
+- Prefer PHPDoc blocks over inline comments. Only add inline comments for exceptionally complex logic.
+- Use array shape type definitions in PHPDoc blocks.
 
-### Scheduling
+=== deployments rules ===
 
-- The budget scheduler should be safe to run repeatedly.
-- Preserve startup execution, hourly execution, and overlap protection behavior.
-- Be careful with timezone-sensitive date logic. The documented default is `America/Chicago`.
-- `SCHEDULING_ENABLED=false` disables scheduler execution locally.
-- `SCHEDULING_TIMEZONE` overrides the scheduler timezone.
+# Deployment
 
-### Frontend
+- Laravel can be deployed using [Laravel Cloud](https://cloud.laravel.com/), which is the fastest way to deploy and scale production Laravel applications.
+- Activate the `deploying-to-cloud` skill whenever deploying to Laravel Cloud, configuring Cloud environments or resources, using the Cloud CLI, or troubleshooting Cloud deployments.
 
-- Match current Nuxt UI component patterns and Pinia store organization.
-- Use `apps/web/app/types` for shared frontend contracts.
-- Use existing composables such as `useStoreApi`, `useAppToast`, `useAbortController`, `useDateUtils`, and `useCurrencyUtils` before adding new data-access or formatting helpers.
-- Keep modal, page shell, page header, and list/list-item ownership consistent with nearby feature folders.
-- Use Nuxt server routes and proxy utilities for API/auth flows before adding new client-side networking patterns.
+=== inertia-laravel/core rules ===
 
-### Backend
+# Inertia
 
-- Keep controllers, services/repositories, DTOs, entities, and module wiring colocated in the owning feature module.
-- Keep auth-sensitive endpoints aligned with the existing request-user/internal-auth patterns.
-- Prefer repository methods for persistence details instead of spreading TypeORM query logic across controllers.
+- Inertia creates fully client-side rendered SPAs without modern SPA complexity, leveraging existing server-side patterns.
+- Components live in `resources/js/Pages` (unless specified in `vite.config.js`). Use `Inertia::render()` for server-side routing instead of Blade views.
+- ALWAYS use `search-docs` tool for version-specific Inertia documentation and updated code examples.
+- IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
 
-## Change Discipline
+# Inertia v3
 
-- Prefer focused edits over broad refactors.
-- Do not switch package managers.
-- Do not hand-edit generated output unless the repo already treats it as source.
-- Do not introduce feature-specific Codex skills to document current implementation; use focused files in `docs/`.
-- If behavior spans apps, run at least the relevant `lint`, `typecheck`, or `build` target before finishing.
+- Use all Inertia features from v1, v2, and v3. Check the documentation before making changes to ensure the correct approach.
+- New v3 features: standalone HTTP requests (`useHttp` hook), optimistic updates with automatic rollback, layout props (`useLayoutProps` hook), instant visits, simplified SSR via `@inertiajs/vite` plugin, custom exception handling for error pages.
+- Carried over from v2: deferred props, infinite scroll, merging props, polling, prefetching, once props, flash data.
+- When using deferred props, add an empty state with a pulsing or animated skeleton.
+- Axios has been removed. Use the built-in XHR client with interceptors, or install Axios separately if needed.
+- `Inertia::lazy()` / `LazyProp` has been removed. Use `Inertia::optional()` instead.
+- Prop types (`Inertia::optional()`, `Inertia::defer()`, `Inertia::merge()`) work inside nested arrays with dot-notation paths.
+- SSR works automatically in Vite dev mode with `@inertiajs/vite` - no separate Node.js server needed during development.
+- Event renames: `invalid` is now `httpException`, `exception` is now `networkError`.
+- `router.cancel()` replaced by `router.cancelAll()`.
+- The `future` configuration namespace has been removed - all v2 future options are now always enabled.
 
-## Gaps To Keep In Mind
+=== laravel/core rules ===
 
-- `PLAN.md` notes that automated unit tests for scheduling date utilities are still missing.
-- There is no dedicated root test script right now; rely on lint, typecheck, build, and targeted validation until tests are added.
+# Do Things the Laravel Way
+
+- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using `php artisan list` and check their parameters with `php artisan [command] --help`.
+- If you're creating a generic PHP class, use `php artisan make:class`.
+- Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
+
+### Model Creation
+
+- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `php artisan make:model --help` to check the available options.
+
+## APIs & Eloquent Resources
+
+- For APIs, default to using Eloquent API Resources and API versioning unless existing API routes do not, then you should follow existing application convention.
+
+## URL Generation
+
+- When generating links to other pages, prefer named routes and the `route()` function.
+
+## Testing
+
+- When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
+- Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
+- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
+
+=== pint/core rules ===
+
+# Laravel Pint Code Formatter
+
+- If you have modified any PHP files, you must run `vendor/bin/pint --dirty --format agent` before finalizing changes to ensure your code matches the project's expected style.
+- Do not run `vendor/bin/pint --test --format agent`, simply run `vendor/bin/pint --format agent` to fix any formatting issues.
+
+=== phpunit/core rules ===
+
+# PHPUnit
+
+- This project uses PHPUnit. Create tests with `php artisan make:test --phpunit {name}`.
+- Do not include the test suite directory in `{name}`. Use `SomeFeatureTest`, not `Feature/SomeFeatureTest`.
+- Read the `testing-best-practices` skill for guidance on coverage, naming, structure, dependency isolation, and review.
+
+## Running Tests
+
+- Run the narrowest set of tests that covers the change. Pass a file path or `--filter=testName` to `php artisan test --compact`.
+- Rerun a test after each change to it.
+- Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
+
+=== inertia-vue/core rules ===
+
+# Inertia + Vue
+
+Vue components must have a single root element.
+- IMPORTANT: Activate `inertia-vue-development` when working with Inertia Vue client-side patterns.
+
+</laravel-boost-guidelines>

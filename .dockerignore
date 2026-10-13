@@ -1,0 +1,14 @@
+.git
+.env
+.runtime
+vendor
+node_modules
+docs/design
+storage/logs/*
+storage/framework/views/*
+bootstrap/cache/*.php
+finance.dump
+public/build
+public/hot
+test-results
+playwright-report

@@ -1,0 +1,68 @@
+@import "tailwindcss";
+@theme {
+ --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+ --color-ink: #14171c;
+ --color-ink-secondary: #3b4350;
+ --color-muted: #5b6472;
+ --color-ground: #f6f7f9;
+ --color-subtle: #fafbfc;
+ --color-selected: #f3f6fb;
+ --color-line: #e3e6eb;
+ --color-line-soft: #eef0f3;
+ --color-control: #d5dae1;
+ --color-input: #c9cfd8;
+ --color-income: #1e4a8f;
+ --color-info-soft: #e6eefa;
+ --color-warning: #9a3412;
+ --color-warning-soft: #ffedd5;
+ --color-warning-strong: #c2410c;
+}
+@layer base {
+ body { @apply bg-white font-sans text-sm text-ink antialiased; }
+ button, a, input, select, textarea { @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600; }
+ button:not(:disabled), a { cursor: pointer; }
+ button:disabled { @apply cursor-wait opacity-50; }
+ h1 { @apply text-[26px] leading-tight font-semibold tracking-tight; }
+ h2 { @apply text-[17px] font-semibold; }
+ label { @apply text-sm font-medium; }
+ input:not([type=checkbox]):not([type=radio]), select, textarea { @apply w-full rounded-md border border-input bg-white px-3 py-2 text-sm; min-height:40px; }
+ input[type=checkbox] { @apply size-4 rounded accent-ink; }
+ th { @apply whitespace-nowrap bg-subtle px-4 py-3 text-left text-[11px] font-medium uppercase tracking-wide text-muted; }
+ td { @apply border-t border-line-soft px-4 py-3 align-middle; }
+ table { @apply w-full border-collapse text-sm; }
+ dialog { @apply fixed m-auto w-[min(600px,calc(100%-32px))] max-h-[90dvh] overflow-hidden rounded-[10px] border border-line bg-white p-0 text-ink; box-shadow:0 16px 48px rgb(20 23 28 / .24); }
+ dialog[open] { display: flex; flex-direction: column; }
+ dialog::backdrop { background: rgb(142 148 156 / .94); }
+}
+@layer components {
+ .btn { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-control bg-white px-3.5 py-2 text-sm font-medium transition-colors hover:bg-ground; }
+ .btn-primary { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-ink bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ink-secondary; }
+ .btn-danger { @apply inline-flex items-center justify-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3.5 py-2.5 text-sm font-medium text-orange-800 hover:bg-orange-100; }
+ .icon-btn { @apply inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-zinc-100 hover:text-ink; }
+ .panel { @apply rounded-lg border border-line bg-white; }
+ .badge { @apply inline-flex items-center gap-1 rounded-full bg-ground px-2 py-0.5 text-[11px] font-medium text-muted; }
+ .badge-info { @apply bg-info-soft text-income; }
+ .badge-warning { @apply bg-warning-soft text-warning; }
+ .badge-pending { @apply rounded border border-dashed border-muted bg-transparent; }
+ .btn-destructive { @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-warning bg-warning px-4 py-2 text-sm font-medium text-white hover:bg-warning-strong; }
+ .link-danger { @apply text-sm font-medium text-warning hover:underline; }
+ .segmented { @apply inline-flex flex-wrap gap-0.5 rounded-md bg-[#e9ecf1] p-1; }
+ .segmented > button, .segmented > a { @apply rounded px-3 py-1.5 text-xs font-medium text-muted; }
+ .segmented > [aria-pressed=true], .segmented > [aria-current=page] { @apply bg-white text-ink shadow-sm; }
+ .form-section { @apply min-w-0 rounded-lg border border-line p-5; }
+ .form-section > legend { @apply px-1.5 text-sm font-medium; }
+ .preview-box { @apply rounded-md bg-ground p-4; }
+ .preview-caption { @apply mb-2 text-[11px] font-medium uppercase tracking-wide text-muted; }
+ .callout { @apply flex items-start gap-2.5 rounded-md bg-info-soft p-3.5 text-sm leading-relaxed text-income; }
+ .callout-warning { @apply bg-warning-soft text-warning; }
+ .avatar { @apply inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-[#dce4f1] text-xs font-medium text-income; }
+ .page-header { @apply mb-6 flex flex-wrap items-center justify-between gap-4; }
+ .workspace-selector { @apply mb-2 w-full rounded-md border border-line bg-white p-3.5 text-left; }
+ .workspace-selector[aria-pressed=true] { @apply border-ink ring-1 ring-ink; }
+ .selected-row { @apply bg-selected; box-shadow:inset 3px 0 0 var(--color-ink); }
+ .field { @apply flex min-w-0 flex-col gap-1.5; }
+ .help { @apply text-xs leading-relaxed text-muted; }
+ .money { @apply font-medium tabular-nums; }
+ .empty { @apply flex min-h-56 flex-col items-center justify-center gap-3 px-8 py-12 text-center text-muted; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

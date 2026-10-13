@@ -1,0 +1,83 @@
+name: household-finance
+x-app: &app
+  image: household-finance:local
+  build: { context: ., target: runtime }
+  env_file: .env
+  environment:
+    DB_HOST: postgres
+    REDIS_HOST: redis
+    DB_CONNECTION: pgsql
+    DB_USERNAME: finance_app
+    DB_PASSWORD: ${DB_PASSWORD:-local-app-password}
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_healthy }
+    init: { condition: service_completed_successfully }
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: finance_admin
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-local-admin-password}
+      POSTGRES_DB: finance
+      APP_DB_PASSWORD: ${DB_PASSWORD:-local-app-password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/01-app.sh:ro
+    healthcheck: { test: [CMD-SHELL, "pg_isready -U finance_admin -d finance"], interval: 5s, timeout: 5s, retries: 15 }
+    restart: unless-stopped
+  redis:
+    image: redis:8-alpine
+    command: [redis-server, --appendonly, "yes", --maxmemory-policy, noeviction]
+    volumes: [redis-data:/data]
+    healthcheck: { test: [CMD, redis-cli, ping], interval: 5s, timeout: 3s, retries: 15 }
+    restart: unless-stopped
+  init:
+    image: household-finance:local
+    build: { context: ., target: runtime }
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      REDIS_HOST: redis
+      DB_CONNECTION: pgsql
+      DB_USERNAME: finance_admin
+      DB_PASSWORD: ${DB_ADMIN_PASSWORD:-local-admin-password}
+    command: [sh, -c, "php artisan migrate --force && php artisan app:grant"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: "no"
+  app: *app
+  web:
+    build: { context: ., target: web }
+    ports: ["127.0.0.1:${APP_PORT:-8080}:80"]
+    depends_on: { app: { condition: service_started } }
+    healthcheck: { test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1/up"], interval: 5s, timeout: 5s, retries: 20, start_period: 10s }
+    restart: unless-stopped
+  worker:
+    <<: *app
+    command: [php, artisan, "queue:work", redis, "--queue=reminders,budget-notifications,sync,projections,default", "--tries=3", "--timeout=600", "--sleep=2"]
+  scheduler:
+    <<: *app
+    command: [php, artisan, "schedule:work"]
+  tests:
+    profiles: [test]
+    build: { context: ., target: test }
+    env_file: .env
+    environment:
+      APP_ENV: testing
+      DB_HOST: postgres
+      DB_DATABASE: finance_test
+      DB_USERNAME: finance_admin
+      DB_PASSWORD: ${DB_ADMIN_PASSWORD:-local-admin-password}
+      REDIS_HOST: redis
+      SESSION_DRIVER: array
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+volumes:
+  postgres-data:
+  redis-data:
